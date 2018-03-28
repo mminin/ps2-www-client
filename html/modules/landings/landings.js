@@ -395,9 +395,9 @@ requirejs(['../../libs/web-world-wind/WorldWind',
             }        
 
             // Get all new footprints by data type
-            getAllFootprintsFromDatabase()
+            getAllFootprintsFromDatabase();
             // Add the new footprints on the surface
-            addAllFootprintsOnSurface();
+            //addAllFootprintsOnSurface();// => MM: i don't think this function exists
 
             // remove all selected footprints in dropdown box
             removeAllSelectedFootPrints();
@@ -418,7 +418,8 @@ requirejs(['../../libs/web-world-wind/WorldWind',
 
 
         // add all footprints shape on the surface
-        addAllFootprintsOnSurface();
+        //addAllFootprintsOnSurface();// => MM: i don't think this function exists
+
 
 
         /* This function will check if user click on globe or click on loaded image for footprint:
