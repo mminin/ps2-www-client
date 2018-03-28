@@ -106,7 +106,10 @@ $( document ).ready(function() {
             setAttributeToFootPrint(checkedAttributes, coverageID);
 
             // This function is called in landings.js after checkedFootPrintsArray has been updated. 
-            accessCheckedFootPrintsArray(); 
+            var newClickedFootPrintsArray = [];
+            newClickedFootPrintsArray.push(coverageID.toLowerCase());
+            
+            accessCheckedFootPrintsArray(newClickedFootPrintsArray); 
 
             // Update the content of selected footprints dropdown also
             updateCheckedFootPrintsDropdownBox();
@@ -193,6 +196,16 @@ $( document ).ready(function() {
         updateMenuContext();
         return false;
     });   
+
+
+    // bind download on click menu item
+    $("#menuContext").on("click", ".downloadGeoTiff", function(e) {
+       alert("You are downloading the Coverage in GeoTiff image format.");
+    });
+
+    $("#menuContext").on("click", ".downloadWcpsPng", function(e) {
+       alert("You are downloading the WCPS result in PNG image format.");
+    });
     
 
     // Check if coverageID already selected
@@ -276,6 +289,12 @@ $( document ).ready(function() {
         var unHightLightSubMenuItemTemplate = '<li><a href="#" id="menuContext_$COVERAGEID_unhightlight" class="menuContext_hightlight" data="$COVERAGEID"> <span class="glyphicon glyphicon-sort" style="color:green;"></span>Unlock On Footprint</a></li>';
         var unSelectSubMenuItemTemplate = '<li><a href="#" id="menuContext_$COVERAGEID_unselect" class="menuContext_select" data="$COVERAGEID"> <span class="glyphicon glyphicon-remove-circle" style="color:blue;"></span>Unselect Footprint </a></li>';
 
+        // download GeoTiff
+        var downloadGeoTiffSubMenuItemTemplate = "<li><a class='downloadGeoTiff' href='" + ps2GetCoverage + "$COVERAGEID' target='_blank' download> <span class='glyphicon glyphicon-download-alt' style='color:red;'></span>Download Coverage in GeoTiff</a></href>";
+
+        // download PNG
+        var downloadWcpsPngSubMenuItemTemplate = "<li><a class='downloadWcpsPng' href='$WCPS_QUERY_LINK' target='_blank' download> <span class='glyphicon glyphicon-download-alt' style='color:orange;'></span>Download WCPS result in PNG</a></href>";
+
         var menuContextItems = "";
 
         //  Get all the contained footprints
@@ -289,17 +308,33 @@ $( document ).ready(function() {
 
 
                 // select
-                if(!isSelectedCoverage(coverageID)) {
+                if (!isSelectedCoverage(coverageID)) {
                     menuContextSubItemFunctions += replaceAll(selectSubMenuItemTemplate, "$COVERAGEID", coverageID);
                 } else {
                     menuContextSubItemFunctions += replaceAll(unSelectSubMenuItemTemplate, "$COVERAGEID", coverageID);
                 }
 
                 // hightlight
-                if(!isHightLightedCoverage(coverageID)) {
+                if (!isHightLightedCoverage(coverageID)) {
                     menuContextSubItemFunctions += replaceAll(hightLightSubMenuItemTemplate, "$COVERAGEID", coverageID);
                 } else {
                     menuContextSubItemFunctions += replaceAll(unHightLightSubMenuItemTemplate, "$COVERAGEID", coverageID);
+                }
+
+                // download GeoTiff (always)
+                // Mars, coverageId is lower case, moon coverage id is upper case
+                if (clientName == MARS_CLIENT) {
+                    menuContextSubItemFunctions += replaceAll(downloadGeoTiffSubMenuItemTemplate, "$COVERAGEID", coverageID.toLowerCase());    
+                } else {
+                    menuContextSubItemFunctions += replaceAll(downloadGeoTiffSubMenuItemTemplate, "$COVERAGEID", coverageID);    
+                }
+                
+
+
+                // downloadable PNG (only when WCPS query is loaded)
+                var wcpsQuery = checkCoverageIDDownloable(coverageID);
+                if (wcpsQuery !== false) {
+                    menuContextSubItemFunctions += replaceAll(downloadWcpsPngSubMenuItemTemplate, "$WCPS_QUERY_LINK", wcpsQuery);
                 }                 
 
             
@@ -313,7 +348,7 @@ $( document ).ready(function() {
             // menu items
             menuContextItems += menuContextItem;
 
-        }
+        }        
 
         menuContextContent = menuContextContentTemplate.replace("$MENUCONTEXT_ITEMS", menuContextItems);
 
@@ -323,4 +358,15 @@ $( document ).ready(function() {
         $("#menuContext").menu("refresh"); // reload menu context with new items
     }
 
+
+    // if coverageID is loaded image then it can be added as menu item to download
+    function checkCoverageIDDownloable(coverageID) {
+        for (var i = 0; i < checkedFootPrintsArray.length; i++) {
+            if (checkedFootPrintsArray[i].coverageID.toLowerCase() === coverageID.toLowerCase()) {
+                // return wcps query link
+                return checkedFootPrintsArray[i].wcpsQuery;
+            }
+        }
+        return false;
+    }
 });

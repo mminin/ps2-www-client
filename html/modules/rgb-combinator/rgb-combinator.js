@@ -4,6 +4,11 @@ var wcpsQueriesJSON = ""; // array to store wcpsQueries from server
 var DEFAULT_BANDS = 438;
 var SUBMENU_BANDS = 73;
 
+if (clientName === MOON_CLIENT) {
+    DEFAULT_BANDS = 85;
+    SUBMENU_BANDS = 17;
+}
+
 // when combine with WCPS custom queries will need to stretch it with Python web service
 var stretch = false;
 var isAllBandsCustomWCPSQueries = 0;
@@ -12,11 +17,11 @@ var availableWCPSQueries = []; // store all the WCPS queries from JSON
 
 var selectedFootPrintsArray = []; // store the selected footprints from dropDownSelectedFootPrints
 
-// RGB Bands default for all footprints from WCPS Query
-var redBandDefault = "(int)(255 / (max((data.band_233 != 65535) * data.band_233) - min(data.band_233))) * (data.band_233 - min(data.band_233))";
-var blueBandDefault = "(int)(255 / (max((data.band_78 != 65535) * data.band_78) - min(data.band_78))) * (data.band_78 - min(data.band_78))";
-var greenBandDefault = "(int)(255 / (max((data.band_13 != 65535) * data.band_13) - min(data.band_13))) * (data.band_13 - min(data.band_13))";
-var alphaBandDefault = "(data.band_100 != 65535) * 255";
+// array of mars_mrdr bands
+var MARS_MRDR_BANDS = "R770, RBR, BD530, SH600, BD640, BD860, BD920, RPEAK1, BDI1000VIS, BDI1000IR, IRAC, OLINDEX, LCPINDEX, HCPXINDEX, VAR, ISLOPE1, BD1435, BD1500, ICER1, BD1750, BD1900, BDI2000, BD2100, BD2210, BD2290, D2300, SINDEX, ICER2, BDCARB, BD3000, BD3100, BD3200, BD3400, CINDEX, R440, IRR1, BD1270O2, BD1400H2O, BD2000CO2, BD2350, BD2600, IRR2, R2700, BD2700, IRR3";
+
+MARS_MRDR_BANDS = MARS_MRDR_BANDS.split(", ");
+
 
 // return the value of Red/Green/Blue band on clicked coordinate
 var wcpsQueryRGBValueTemplate = 'for data in ($COVERAGE_ID) return encode({ $QUERY }, "csv")';
@@ -99,7 +104,11 @@ window.queryRGBValue = function(coverageID, longitude, latitude, rgbQueryArray) 
     }
 
     // Get value of band combinations
-    var wcpsQuery = wcpsQueryRGBValueTemplate.replace("$COVERAGE_ID", coverageID.toLowerCase()).replace("$QUERY", tmp);
+    if (clientName === MARS_CLIENT) {
+        coverageID = coverageID.toLowerCase();
+    }
+
+    var wcpsQuery = wcpsQueryRGBValueTemplate.replace("$COVERAGE_ID", coverageID).replace("$QUERY", tmp);
 
     console.log(ps2WCPSEndPoint + wcpsQuery);
 
@@ -129,13 +138,14 @@ window.queryRGBValue = function(coverageID, longitude, latitude, rgbQueryArray) 
     });
 }
 
+
 /* add band WCPS suggestion in RGB bands combination */
-$( ".autocomplete" ).autocomplete({
-      source: availableWCPSQueries
-});
+function loadAutoCompleteRGBBands() {    
+    $( ".autocomplete" ).autocomplete({        
+        source: availableWCPSQueries
+    });    
+}
 
-
-// $(document).ready(function() {
 
 function replaceAll(template, target, replacement) {
     return template.split(target).join(replacement);
@@ -164,10 +174,89 @@ function setAttributeToFootPrint(attribute, coverageID) {
 }
 
 // This function will generate the menu items and menu subitems for dropDownRGBBands in service-template.html
-loadDropDownRGBBands = function() {
-    var menuItems = DEFAULT_BANDS / SUBMENU_BANDS;
+loadDropDownRGBBands = function() {    
     var dropDownContent = "";
 
+    if (dataType == MARS_SUB_TYPE_MRDR) {
+        // create Coverage Bands dropdown with array of specified bands (mars_mrdr)
+        dropDownContent = createRGBCoverageBandsByNames();
+
+    } else {
+        // create Coverage Bands dropdown with band numbers
+        dropDownContent = createRGBCoverageBandsByNumbers();
+    }
+
+    // add the content to dropDownRGB
+    $("#dropDownRGBBands").html(dropDownContent);
+}
+
+// use arra of specified bands to create dropdown mars_mrdr
+function createRGBCoverageBandsByNames() {
+    var dropDownContent = "";
+    var SUB_MENU_ITEMS_LENGTH = 9;
+    // 5 bands of mars mrdr in a group
+    var menuItems = MARS_MRDR_BANDS.length / SUB_MENU_ITEMS_LENGTH;
+
+    var dropDownRowItemTemplate = '<li class="dropdown-submenu dropdown-toggle" id="rgb_band_dropdown_$MENU_ITEM_INDEX" data-toggle="dropdown">' +
+        '<a href="#">Group $MENU_ITEM</a>' +
+        '<ul class="dropdown-menu scrollable-sub-menu">'
+        //  insert menuSubItems to here
+        +
+        '$SUBMENU_ITEM_ROW' +
+        '</ul>' +
+        '</li>' +
+        '<li class="divider"></li>';
+
+    var dropDownRowSubItemTemplate = '<li>' +
+        '<a href="#">' +
+        '$BAND_INDEX' +
+        '<div class="rgb_menu btn-group btn-group-xs" id="rgb_band_$MENU_ITEM_INDEX_$MENU_SUBITEM_INDEX" data-content="$BAND_INDEX">' +
+        '<button type="button" class="btn btn-danger btn-xs" id="rgb_band_$MENU_ITEM_INDEX_$MENU_SUBITEM_INDEX_red" style="margin-left:20px;">Red</button>' +
+        '<button type="button" class="btn btn-success btn-xs" id="rgb_band_$MENU_ITEM_INDEX_$MENU_SUBITEM_INDEX_green">Green</button>' +
+        '<button type="button" class="btn btn-primary btn-xs" id="rgb_band_$MENU_ITEM_INDEX_$MENU_SUBITEM_INDEX_blue">Blue</button>' +
+        '</div>' +
+        '</a>' +
+        '</li>' +
+        '<li class="divider"></li>'
+        // rgb_dropdown_1, Band 1 - 50, 1, rgb_band_1_1, rgb_band_1_2
+
+    var current_index = 0;
+    for (var i = 1; i <= menuItems; i++) {       
+        var dropDownRow = "";
+        dropDownRow = dropDownRowItemTemplate.replace("$MENU_ITEM_INDEX", i);
+        dropDownRow = dropDownRow.replace("$MENU_ITEM", i);
+
+        // add sub menu items with specified band names
+        var dropDownSubItemsRows = "";
+        for (var j = current_index; j < current_index + SUB_MENU_ITEMS_LENGTH; j++) {
+            // Band index = band name of coverage
+            var band_name = MARS_MRDR_BANDS[j];
+
+            var subMenuItemRow = "";
+            subMenuItemRow = replaceAll(dropDownRowSubItemTemplate, "$BAND_INDEX", band_name);
+            subMenuItemRow = replaceAll(subMenuItemRow, "$MENU_ITEM_INDEX", i);
+            subMenuItemRow = replaceAll(subMenuItemRow, "$MENU_SUBITEM_INDEX", j);
+
+            // add sub menu item rows to 1 row
+            dropDownSubItemsRows = dropDownSubItemsRows + subMenuItemRow;                        
+        }
+        current_index += SUB_MENU_ITEMS_LENGTH;
+        
+        // insert dropDownSubItemsRow to dropDownRow
+        dropDownRow = dropDownRow.replace("$SUBMENU_ITEM_ROW", dropDownSubItemsRows);
+
+        // insert dropDownRow to dropDownContent
+        dropDownContent = dropDownContent + dropDownRow;
+    }
+
+    return dropDownContent;
+}
+
+
+// use band numbers mars_trdr, moon
+function createRGBCoverageBandsByNumbers() {
+    var dropDownContent = "";
+    var menuItems = DEFAULT_BANDS / SUBMENU_BANDS;
     var dropDownRowItemTemplate = '<li class="dropdown-submenu dropdown-toggle" id="rgb_band_dropdown_$MENU_ITEM_INDEX" data-toggle="dropdown">' +
         '<a href="#">Band $MIN_BAND_OF_ITEM - $MAX_BAND_OF_ITEM</a>' +
         '<ul class="dropdown-menu scrollable-sub-menu">'
@@ -223,9 +312,7 @@ loadDropDownRGBBands = function() {
         dropDownContent = dropDownContent + dropDownRow;
     }
 
-    // add the content to dropDownRGB
-    $("#dropDownRGBBands").html(dropDownContent);
-
+    return dropDownContent;
 }
 
 
@@ -234,9 +321,16 @@ loadDropDownRGBBands = function() {
 function loadWCPSQueriesJSON() {
     // To add new WCPS query, go to http://www.jsoneditoronline.org/ and paste the minified and see the collapse version, add/modify it in the web
 
+    if (dataType == MARS_SUB_TYPE_MRDR) {
+        // does not have any customized WCPS queries on these coverages
+        wcpsQueriesJSON = "";
+        availableWCPSQueries = [];
+        return;
+    }
+
     $.ajax({
         type: "GET",
-        url: "http://access.planetserver.eu/html/data/wcps_queries.json",
+        url: ps2EndPoint + "/html/data/wcps_queries.json",
         data: "{dataset: 'CRISM'}", // it will query later on database with dataset
         cache: false,
         async: false,
@@ -250,11 +344,14 @@ function loadWCPSQueriesJSON() {
     var menuItems = wcpsQueriesJSON.wcps_queries; //Object.keys(wcpsObj.wcps_queries); // length of WCPS types (example: 2)
     var menuItemsLength = menuItems.length; // length of menuItems
 
+    // clear before add new WCPS queries
+    availableWCPSQueries = [];
+
     // Add all the WCPS queries for each menuItem to array
-    for (i = 0; i < menuItemsLength; i++) {
+    for (var i = 0; i < menuItemsLength; i++) {
         var subMenuItems = menuItems[i].array;
 
-        for (j = 0; j < subMenuItems.length; j++) {
+        for (var j = 0; j < subMenuItems.length; j++) {
             availableWCPSQueries.push(subMenuItems[j].name);
         }
     }
@@ -282,8 +379,21 @@ loadDropDownWCPSBands = function() {
         }
     */
 
+    // mars_mrdr does not have custom wcps queries
+    if (dataType == MARS_SUB_TYPE_MRDR) {        
+        // auto complete bands from mars_mrdr array isntead of WCPS custom queries
+        availableWCPSQueries = MARS_MRDR_BANDS;
+        $("#dropDownWCPSBands").html("");
+        // auto complete from band names
+        loadAutoCompleteRGBBands();
+        return;
+    }
+
     // load WCPS queries from server
     loadWCPSQueriesJSON();
+
+    // auto complete from wcps custome queries
+    loadAutoCompleteRGBBands();
 
     // and copy the new minified to WCPS_JSON
 
@@ -309,7 +419,7 @@ loadDropDownWCPSBands = function() {
         '<button type="button" class="btn btn-danger btn-xs" id="wcps_band_$MENU_ITEM_INDEX_$MENU_SUBITEM_INDEX_red" style="margin-left:10px;">Red</button>' +
         '<button type="button" class="btn btn-success btn-xs" id="wcps_band_$MENU_ITEM_INDEX_$MENU_SUBITEM_INDEX_green">Green</button>' +
         '<button type="button" class="btn btn-primary btn-xs" id="wcps_band_$MENU_ITEM_INDEX_$MENU_SUBITEM_INDEX_blue">Blue</button>' +
-        '<button type="button" style="margin-left:10px;" id="wcps_band_$MENU_ITEM_INDEX_$MENU_SUBITEM_INDEX_view_query" class="rgb_wcps_view_query btn btn-info btn-xs" data-title="WCPS query content" data-toggle="clickover" data-content="$WCPS_QUERY" data-placement="right" data-container="body"><span class="glyphicon glyphicon-info-sign"></span>WCPS</button>' +
+        '<button type="button" style="margin-left:10px;" id="wcps_band_$MENU_ITEM_INDEX_$MENU_SUBITEM_INDEX_view_query" class="rgb_wcps_view_query btn btn-info btn-xs" data-title="$DESCRIPTION" data-toggle="clickover" data-content="$WCPS_QUERY" data-placement="right" data-container="body"><span class="glyphicon glyphicon-info-sign"></span>WCPS</button>' +
         '</div>' +
         '</a>' +
         '</li>' +
@@ -327,7 +437,7 @@ loadDropDownWCPSBands = function() {
     return; */
 
 
-    for (i = 0; i < menuItemsLength; i++) {
+    for (var i = 0; i < menuItemsLength; i++) {
         var MAX_BAND_OF_ITEM = (i + 1) * SUBMENU_BANDS; // 1 * 50 = 50, 2 * 50 = 100;
         var MIN_BAND_OF_ITEM = (i) * SUBMENU_BANDS // 1, 51
 
@@ -342,13 +452,16 @@ loadDropDownWCPSBands = function() {
 
         var subMenuItems = menuItems[i].array;
 
-        for (j = 0; j < subMenuItems.length; j++) {
+        for (var j = 0; j < subMenuItems.length; j++) {
             // Band index = min band of item
 
             var subMenuItemRow = "";
             subMenuItemRow = replaceAll(dropDownRowSubItemTemplate, "$WCPS_BAND_NAME", subMenuItems[j].name);
             subMenuItemRow = replaceAll(subMenuItemRow, "$MENU_ITEM_INDEX", i);
             subMenuItemRow = replaceAll(subMenuItemRow, "$MENU_SUBITEM_INDEX", j);
+
+                        // description for the custom WCPS query
+            subMenuItemRow = replaceAll(subMenuItemRow, "$DESCRIPTION", subMenuItems[j].description);        
 
             // replace WCPS query in sub menu item
             subMenuItemRow = replaceAll(subMenuItemRow, "$WCPS_QUERY", subMenuItems[j].query);
@@ -658,7 +771,7 @@ $('#dropDownRGBBands, #dropDownWCPSBands').on("click", ".rgb_menu > button.btn, 
 
 
 // This function will check if user want to combine RGB (numers) or WCPS (with some text) to RGB combinations
-function isSimpleRGBBand(bandName) {
+function isSimpleRGBBand(bandName) {    
     if(!isNaN(parseFloat(bandName))) {
         // it is band number
         return true;
@@ -682,9 +795,22 @@ function getBandWCPSQuery(simpleBandTemplate, targetName, bandName) {
 
     var targetNameSubString = tmp; //Red
 
+    // mars_mrdr band name is as same as number
+    if (dataType == MARS_SUB_TYPE_MRDR) {
+        // all mar_mrdr is considered as wcps custom queries bands and need streching service
+        isAllBandsCustomWCPSQueries = 3;
+        isSuccessRGBCombination = true;
+        if (MARS_MRDR_BANDS.indexOf(bandName) == -1) {
+            alert("Your band: " + bandName + " for " + targetNameSubString + " does not exit!");
+            return false;
+        }
+
+        return replaceAll(simpleBandTemplate, targetName, bandName);
+    }
+
     // If bandName is number then it will use simpleBandTemplate
-    if(isSimpleRGBBand(bandName)) {
-        if(bandName > DEFAULT_BANDS || bandName < 0) {
+    if (isSimpleRGBBand(bandName)) {
+        if (bandName > DEFAULT_BANDS || bandName < 0) {
             isSuccessRGBCombination = false;
             alert("Dataset has only maximum: " + DEFAULT_BANDS + " bands.");
         }
@@ -699,9 +825,9 @@ function getBandWCPSQuery(simpleBandTemplate, targetName, bandName) {
 
         var isExist = false;
         // traverse the menuItems and subMenuItems to get the WCPS query of subMenuItem which is same as bandName
-        for (i = 0; i < menuItemsLength; i++) {
+        for (var i = 0; i < menuItemsLength; i++) {
             var subMenuItems = menuItems[i].array;
-            for (j = 0; j < subMenuItems.length; j++) {
+            for (var j = 0; j < subMenuItems.length; j++) {
                 // not need to type upper case
                 if (bandName.toLowerCase() === subMenuItems[j].name.toLowerCase()) {
 
@@ -713,7 +839,7 @@ function getBandWCPSQuery(simpleBandTemplate, targetName, bandName) {
         }
 
         // bandName does not exist in WCPS custom queries
-        if(isExist === false) {
+        if (isExist === false) {
             isSuccessRGBCombination = false;
             alert("Your band: " + bandName + " for " + targetNameSubString + " does not exist in WCPS custom queries list.");
         }
@@ -741,12 +867,20 @@ $("#btnSubmitRGBCombination").click(function(e) {
             '{'
             // insert bands here
             +
-            "$RGB_BANDS" +
-            '  alpha: (data.band_100 != 65535) * 255 }, "png", "nodata=null")';
+            "$RGB_BANDS";
 
-        var RED_BAND = 'Red:   (int)(255 / (max((data.band_$RED_BAND != 65535) * data.band_$RED_BAND) - min(data.band_$RED_BAND))) * (data.band_$RED_BAND - min(data.band_$RED_BAND));'
-        var GREEN_BAND = 'Green: (int)(255 / (max((data.band_$GREEN_BAND != 65535) * data.band_$GREEN_BAND) - min(data.band_$GREEN_BAND))) * (data.band_$GREEN_BAND - min(data.band_$GREEN_BAND));'
-        var BLUE_BAND = 'Blue:  (int)(255 / (max((data.band_$BLUE_BAND != 65535) * data.band_$BLUE_BAND) - min(data.band_$BLUE_BAND))) * (data.band_$BLUE_BAND - min(data.band_$BLUE_BAND));'
+        WCPS_TEMPLATE = WCPS_TEMPLATE + ' alpha: ' + alphaBandDefault + ' }, "png", "nodata=65535")';        
+
+        var RED_BAND = 'Red: (float)((int)(255 / (max(data.band_$RED_BAND) - min(data.band_$RED_BAND))) * (data.band_$RED_BAND - min(data.band_$RED_BAND)));'
+        var GREEN_BAND = 'Green: (float)((int)(255 / (max(data.band_$GREEN_BAND) - min(data.band_$GREEN_BAND))) * (data.band_$GREEN_BAND - min(data.band_$GREEN_BAND)));'
+        var BLUE_BAND = 'Blue:  (float)((int)(255 / (max(data.band_$BLUE_BAND) - min(data.band_$BLUE_BAND))) * (data.band_$BLUE_BAND - min(data.band_$BLUE_BAND)));'
+
+        if (dataType == MARS_SUB_TYPE_MRDR) {
+            // all red, green, blue are the same, mars_mrdr use name instead of band_number
+            RED_BAND = 'Red: (float)((int)(255 / (max(data.$RED_BAND) - min(data.$RED_BAND))) * (data.$RED_BAND - min(data.$RED_BAND)));';
+            GREEN_BAND = 'Green: (float)((int)(255 / (max( data.$GREEN_BAND) - min(data.$GREEN_BAND))) * (data.$GREEN_BAND - min(data.$GREEN_BAND)));';
+            BLUE_BAND = 'Blue: (float)((int)(255 / (max( data.$BLUE_BAND) - min(data.$BLUE_BAND))) * (data.$BLUE_BAND - min(data.$BLUE_BAND)));';
+        }
 
         // Get band numbers from txt_rgb_red, txt_rgb_green, txt_rgb_blue
         var red_band = $("#txt_rgb_red").val().trim();
@@ -849,17 +983,27 @@ $("#btnSubmitRGBCombination").click(function(e) {
 
                     // replace $COVERAGE_ID with selected coverageID and load WCPS combination on checked footprint
                     WCPS_TEMPLATE_QUERY = replaceAll(WCPS_TEMPLATE, "$COVERAGE_ID", selectedFootPrintsArray[i].coverageID.toLowerCase());
-                    if(isAllBandsCustomWCPSQueries === 3) {
-                        // current encode in PNG has problem when gdalinfo does not ignore NODATA ( = 0 ) then need to use tiff as it will
-                        // calculate correctly
-                        stretch = true;
-                        WCPS_TEMPLATE_QUERY = WCPS_TEMPLATE_QUERY.replace("png", "tiff");
-                        console.log("Stretched WCPS query: " + WCPS_TEMPLATE_QUERY);
+
+                    // with mars, don't need to subset the WCPS query
+                    if (clientName === "mars") {
+                        if(isAllBandsCustomWCPSQueries === 3) {
+                            // current encode in PNG has problem when gdalinfo does not ignore NODATA ( = 0 ) then need to use tiff as it will
+                            // calculate correctly
+                            stretch = true;
+                            WCPS_TEMPLATE_QUERY = WCPS_TEMPLATE_QUERY.replace("png", "tiff");
+                            console.log("Stretched WCPS query: " + WCPS_TEMPLATE_QUERY);
+                        }
+
+                        console.log("WCPS query: " + WCPS_TEMPLATE_QUERY);
+
+                        loadRGBCombinationsMars(WCPS_TEMPLATE_QUERY, selectedFootPrintsArray[i].coverageID.toLowerCase(), stretch)                      
+                    } else {
+                        // moon client, need to subset the WCPS query
+                        var index = getIndexOfCoveragesArray(checkedFootPrintsArray, selectedFootPrintsArray[i].coverageID);
+                        // create WCPS queries with the subsettings
+                        loadRGBCombinationsMoon(selectedFootPrintsArray[i], index, stretch);
                     }
 
-                    console.log("WCPS query: " + WCPS_TEMPLATE_QUERY);
-
-                    loadRGBCombinations(WCPS_TEMPLATE_QUERY, selectedFootPrintsArray[i].coverageID.toLowerCase(), stretch);
                 }
             }
         }

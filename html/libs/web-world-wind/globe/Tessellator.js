@@ -4,7 +4,7 @@
  */
 /**
  * @exports Tessellator
- * @version $Id: Tessellator.js 3136 2015-06-02 17:14:24Z dcollins $
+ * @version $Id: Tessellator.js 3345 2015-07-28 20:28:35Z dcollins $
  */
 define([
         '../error/ArgumentError',
@@ -74,12 +74,14 @@ define([
             this.tileWidth = 32; // baseline: 32
             this.tileHeight = 32; // baseline: 32
 
-            // detailHintOrigin - a parameter that describes the size of the sampling grid when fully zoomed in.
-            // The size of the tile sampling grid when fully zoomed in is related to the logarithm base 10 of this parameter.
-            // A parameter of 2 will have a sampling size approximately 10 times finer than a parameter of 1.
-            // Parameters which result in changes of a factor of two are: 1.1, 1.4, 1.7, 2.0.
-            this.detailHintOrigin = 1.1; // baseline: 1.1
-            this.detailHint = 0;
+            /**
+             * Controls the level of detail switching for this layer. The next highest resolution level is
+             * used when an elevation tile's cell size is greater than this number of pixels, up to the maximum
+             * resolution of the elevation model.
+             * @type {Number}
+             * @default 1.75
+             */
+            this.detailControl = 40;
 
             this.levels = new LevelSet(
                 Sector.FULL_SPHERE,
@@ -100,52 +102,54 @@ define([
 
             this.vertexPointLocation = -1;
             this.vertexTexCoordLocation = -1;
-            this.modelViewProjectionMatrixLocation = -1;
 
             this.texCoords = null;
             this.texCoordVboCacheKey = 'global_tex_coords';
 
             this.indices = null;
-            this.numIndices = null;
             this.indicesVboCacheKey = 'global_indices';
 
+            this.baseIndices = null;
+            this.baseIndicesOffset = null;
+            this.numBaseIndices = null;
+
             this.indicesNorth = null;
+            this.indicesNorthOffset = null;
             this.numIndicesNorth = null;
-            this.indicesNorthVboCacheKey = 'global_north_indices';
 
             this.indicesSouth = null;
+            this.indicesSouthOffset = null;
             this.numIndicesSouth = null;
-            this.indicesSouthVboCacheKey = 'global_south_indices';
 
             this.indicesWest = null;
+            this.indicesWestOffset = null;
             this.numIndicesWest = null;
-            this.indicesWestVboCacheKey = 'global_west_indices';
 
             this.indicesEast = null;
+            this.indicesEastOffset = null;
             this.numIndicesEast = null;
-            this.indicesEastVboCacheKey = 'global_east_indices';
 
             this.indicesLoresNorth = null;
+            this.indicesLoresNorthOffset = null;
             this.numIndicesLoresNorth = null;
-            this.indicesLoresNorthVboCacheKey = 'global_lores_north_indices';
 
             this.indicesLoresSouth = null;
+            this.indicesLoresSouthOffset = null;
             this.numIndicesLoresSouth = null;
-            this.indicesLoresSouthVboCacheKey = 'global_lores_south_indices';
 
             this.indicesLoresWest = null;
+            this.indicesLoresWestOffset = null;
             this.numIndicesLoresWest = null;
-            this.indicesLoresWestVboCacheKey = 'global_lores_west_indices';
 
             this.indicesLoresEast = null;
+            this.indicesLoresEastOffset = null;
             this.numIndicesLoresEast = null;
-            this.indicesLoresEastVboCacheKey = 'global_lores_east_indices';
 
-            this.outlineIndices = null;
-            this.outlineIndicesVboCacheKey = 'global_outline_indices';
+            this.outlineIndicesOffset = null;
+            this.numOutlineIndices = null;
 
-            this.wireframeIndices = null;
-            this.wireframeIndicesVboCacheKey = 'global_wireframe_indices';
+            this.wireframeIndicesOffset = null;
+            this.numWireframeIndices = null;
 
             this.scratchMatrix = Matrix.fromIdentity();
             this.scratchElevations = null;
@@ -254,15 +258,18 @@ define([
             // bound, and therefore must look up the location of attributes by name.
             this.vertexPointLocation = program.attributeLocation(gl, "vertexPoint");
             this.vertexTexCoordLocation = program.attributeLocation(gl, "vertexTexCoord");
-            this.modelViewProjectionMatrixLocation = program.uniformLocation(gl, "mvpMatrix");
             gl.enableVertexAttribArray(this.vertexPointLocation);
 
             if (this.vertexTexCoordLocation >= 0) { // location of vertexTexCoord attribute is -1 when the basic program is bound
                 var texCoordVbo = gpuResourceCache.resourceForKey(this.texCoordVboCacheKey);
-                gl.bindBuffer(WebGLRenderingContext.ARRAY_BUFFER, texCoordVbo);
-                gl.vertexAttribPointer(this.vertexTexCoordLocation, 2, WebGLRenderingContext.FLOAT, false, 0, 0);
+                gl.bindBuffer(gl.ARRAY_BUFFER, texCoordVbo);
+                gl.vertexAttribPointer(this.vertexTexCoordLocation, 2, gl.FLOAT, false, 0, 0);
                 gl.enableVertexAttribArray(this.vertexTexCoordLocation);
             }
+
+            var indicesVbo = gpuResourceCache.resourceForKey(this.indicesVboCacheKey);
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indicesVbo);
+
         };
 
         /**
@@ -272,8 +279,8 @@ define([
         Tessellator.prototype.endRendering = function (dc) {
             var gl = dc.currentGlContext;
 
-            gl.bindBuffer(WebGLRenderingContext.ARRAY_BUFFER, null);
-            gl.bindBuffer(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, null);
+            gl.bindBuffer(gl.ARRAY_BUFFER, null);
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
 
             // Restore the global OpenGL vertex attribute array state.
             if (this.vertexPointLocation >= 0) {
@@ -301,28 +308,28 @@ define([
                 gpuResourceCache = dc.gpuResourceCache;
 
             this.scratchMatrix.setToMultiply(dc.navigatorState.modelviewProjection, terrainTile.transformationMatrix);
-            GpuProgram.loadUniformMatrix(gl, this.scratchMatrix, this.modelViewProjectionMatrixLocation);
+            dc.currentProgram.loadModelviewProjection(gl, this.scratchMatrix);
 
             var vboCacheKey = dc.globeStateKey + terrainTile.tileKey,
                 vbo = gpuResourceCache.resourceForKey(vboCacheKey);
             if (!vbo) {
                 vbo = gl.createBuffer();
-                gl.bindBuffer(WebGLRenderingContext.ARRAY_BUFFER, vbo);
-                gl.bufferData(WebGLRenderingContext.ARRAY_BUFFER, terrainTile.points, WebGLRenderingContext.STATIC_DRAW);
+                gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+                gl.bufferData(gl.ARRAY_BUFFER, terrainTile.points, gl.STATIC_DRAW);
                 dc.frameStatistics.incrementVboLoadCount(1);
                 gpuResourceCache.putResource(vboCacheKey, vbo, terrainTile.points.length * 4);
                 terrainTile.pointsVboStateKey = terrainTile.pointsStateKey;
             }
             else if (terrainTile.pointsVboStateKey != terrainTile.pointsStateKey) {
-                gl.bindBuffer(WebGLRenderingContext.ARRAY_BUFFER, vbo);
-                gl.bufferSubData(WebGLRenderingContext.ARRAY_BUFFER, 0, terrainTile.points);
+                gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+                gl.bufferSubData(gl.ARRAY_BUFFER, 0, terrainTile.points);
                 terrainTile.pointsVboStateKey = terrainTile.pointsStateKey;
             }
             else {
-                dc.currentGlContext.bindBuffer(WebGLRenderingContext.ARRAY_BUFFER, vbo);
+                dc.currentGlContext.bindBuffer(gl.ARRAY_BUFFER, vbo);
             }
 
-            gl.vertexAttribPointer(this.vertexPointLocation, 3, WebGLRenderingContext.FLOAT, false, 0, 0);
+            gl.vertexAttribPointer(this.vertexPointLocation, 3, gl.FLOAT, false, 0, 0);
         };
 
         /**
@@ -349,107 +356,98 @@ define([
             }
 
             var gl = dc.currentGlContext,
-                gpuResourceCache = dc.gpuResourceCache,
-                prim = WebGLRenderingContext.TRIANGLE_STRIP; // replace TRIANGLE_STRIP with LINE_STRIP to debug borders
+                prim = gl.TRIANGLE_STRIP; // replace TRIANGLE_STRIP with LINE_STRIP to debug borders
 
-            var indicesVbo = gpuResourceCache.resourceForKey(this.indicesVboCacheKey);
-            gl.bindBuffer(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, indicesVbo);
+            /*
+             * Indices order in the buffer:
+             *
+             * base indices
+             *
+             * north border
+             * south border
+             * west border
+             * east border
+             *
+             * north lores
+             * south lores
+             * west lores
+             * east lores
+             *
+             * wireframe
+             * outline
+             */
 
             gl.drawElements(
                 prim,
-                this.numIndices,
-                WebGLRenderingContext.UNSIGNED_SHORT,
-                0);
+                this.numBaseIndices,
+                gl.UNSIGNED_SHORT,
+                this.baseIndicesOffset * 2);
 
             var level = terrainTile.level,
                 neighborLevel;
 
             neighborLevel = terrainTile.neighborLevel(WorldWind.NORTH);
             if (neighborLevel && neighborLevel.compare(level) < 0) {
-                var indicesLoresNorthVbo = gpuResourceCache.resourceForKey(this.indicesLoresNorthVboCacheKey);
-                gl.bindBuffer(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, indicesLoresNorthVbo);
-
                 gl.drawElements(
                     prim,
                     this.numIndicesLoresNorth,
-                    WebGLRenderingContext.UNSIGNED_SHORT,
-                    0);
+                    gl.UNSIGNED_SHORT,
+                    this.indicesLoresNorthOffset * 2);
             }
             else {
-                var indicesNorthVbo = gpuResourceCache.resourceForKey(this.indicesNorthVboCacheKey);
-                gl.bindBuffer(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, indicesNorthVbo);
-
                 gl.drawElements(
                     prim,
                     this.numIndicesNorth,
-                    WebGLRenderingContext.UNSIGNED_SHORT,
-                    0);
+                    gl.UNSIGNED_SHORT,
+                    this.indicesNorthOffset * 2);
             }
 
             neighborLevel = terrainTile.neighborLevel(WorldWind.SOUTH);
             if (neighborLevel && neighborLevel.compare(level) < 0) {
-                var indicesLoresSouthVbo = gpuResourceCache.resourceForKey(this.indicesLoresSouthVboCacheKey);
-                gl.bindBuffer(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, indicesLoresSouthVbo);
-
                 gl.drawElements(
                     prim,
                     this.numIndicesLoresSouth,
-                    WebGLRenderingContext.UNSIGNED_SHORT,
-                    0);
+                    gl.UNSIGNED_SHORT,
+                    this.indicesLoresSouthOffset * 2);
             }
             else {
-                var indicesSouthVbo = gpuResourceCache.resourceForKey(this.indicesSouthVboCacheKey);
-                gl.bindBuffer(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, indicesSouthVbo);
-
                 gl.drawElements(
                     prim,
                     this.numIndicesSouth,
-                    WebGLRenderingContext.UNSIGNED_SHORT,
-                    0);
+                    gl.UNSIGNED_SHORT,
+                    this.indicesSouthOffset * 2);
             }
 
             neighborLevel = terrainTile.neighborLevel(WorldWind.WEST);
             if (neighborLevel && neighborLevel.compare(level) < 0) {
-                var indicesLoresWestVbo = gpuResourceCache.resourceForKey(this.indicesLoresWestVboCacheKey);
-                gl.bindBuffer(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, indicesLoresWestVbo);
-
                 gl.drawElements(
                     prim,
                     this.numIndicesLoresWest,
-                    WebGLRenderingContext.UNSIGNED_SHORT,
-                    0);
+                    gl.UNSIGNED_SHORT,
+                    this.indicesLoresWestOffset * 2);
             }
             else {
-                var indicesWestVbo = gpuResourceCache.resourceForKey(this.indicesWestVboCacheKey);
-                gl.bindBuffer(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, indicesWestVbo);
-
                 gl.drawElements(
                     prim,
                     this.numIndicesWest,
-                    WebGLRenderingContext.UNSIGNED_SHORT,
-                    0);
+                    gl.UNSIGNED_SHORT,
+                    this.indicesWestOffset * 2);
             }
 
             neighborLevel = terrainTile.neighborLevel(WorldWind.EAST);
             if (neighborLevel && neighborLevel.compare(level) < 0) {
-                var indicesLoresEastVbo = gpuResourceCache.resourceForKey(this.indicesLoresEastVboCacheKey);
-                gl.bindBuffer(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, indicesLoresEastVbo);
-
                 gl.drawElements(
                     prim,
                     this.numIndicesLoresEast,
-                    WebGLRenderingContext.UNSIGNED_SHORT,
-                    0);
+                    gl.UNSIGNED_SHORT,
+                    this.indicesLoresEastOffset * 2);
             }
             else {
-                var indicesEastVbo = gpuResourceCache.resourceForKey(this.indicesEastVboCacheKey);
-                gl.bindBuffer(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, indicesEastVbo);
-
                 gl.drawElements(
                     prim,
                     this.numIndicesEast,
-                    WebGLRenderingContext.UNSIGNED_SHORT,
-                    0);
+                    gl.UNSIGNED_SHORT,
+                    this.indicesEastOffset * 2);
             }
         };
 
@@ -465,22 +463,18 @@ define([
                     Logger.logMessage(Logger.LEVEL_SEVERE, "Tessellator", "renderWireframeTile", "missingTile"));
             }
 
-            var gl = dc.currentGlContext,
-                gpuResourceCache = dc.gpuResourceCache;
+            var gl = dc.currentGlContext;
 
             // Must turn off texture coordinates, which were turned on in beginRendering.
             if (this.vertexTexCoordLocation >= 0) {
                 gl.disableVertexAttribArray(this.vertexTexCoordLocation);
             }
 
-            var wireframeIndicesVbo = gpuResourceCache.resourceForKey(this.wireframeIndicesVboCacheKey);
-            gl.bindBuffer(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, wireframeIndicesVbo);
-
             gl.drawElements(
-                WebGLRenderingContext.LINES,
-                this.wireframeIndices.length,
-                WebGLRenderingContext.UNSIGNED_SHORT,
-                0);
+                gl.LINES,
+                this.numWireframeIndices,
+                gl.UNSIGNED_SHORT,
+                this.wireframeIndicesOffset * 2);
         };
 
         /**
@@ -495,22 +489,18 @@ define([
                     Logger.logMessage(Logger.LEVEL_SEVERE, "Tessellator", "renderTileOutline", "missingTile"));
             }
 
-            var gl = dc.currentGlContext,
-                gpuResourceCache = dc.gpuResourceCache;
+            var gl = dc.currentGlContext;
 
             // Must turn off texture coordinates, which were turned on in beginRendering.
             if (this.vertexTexCoordLocation >= 0) {
                 gl.disableVertexAttribArray(this.vertexTexCoordLocation);
             }
 
-            var outlineIndicesVbo = gpuResourceCache.resourceForKey(this.outlineIndicesVboCacheKey);
-            gl.bindBuffer(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, outlineIndicesVbo);
-
             gl.drawElements(
-                WebGLRenderingContext.LINE_LOOP,
-                this.outlineIndices.length,
-                WebGLRenderingContext.UNSIGNED_SHORT,
-                0);
+                gl.LINE_LOOP,
+                this.numOutlineIndices,
+                gl.UNSIGNED_SHORT,
+                this.outlineIndicesOffset * 2);
         };
 
         /**
@@ -586,7 +576,6 @@ define([
                 }
             } finally {
                 this.endRendering(dc);
-                dc.bindProgram(null);
             }
         };
 
@@ -630,8 +619,8 @@ define([
             // Assemble the shared tile index geometry. This initializes the index properties used below.
             this.buildSharedGeometry(tile);
 
-            // Compute any intersections with the tile's interior triangles.
-            elements = this.indices;
+            // Compute any intersections with the tile's interior triangles..
+            elements = this.baseIndices;
             WWMath.computeTriStripIntersections(line, points, elements, results);
 
             // Compute any intersections with the tile's south border triangles.
@@ -949,9 +938,9 @@ define([
         };
 
         Tessellator.prototype.tileMeetsRenderCriteria = function (dc, tile) {
-            var s = this.detailHintOrigin + this.detailHint;
+            var s = this.detailControl;
             if (tile.sector.minLatitude >= 75 || tile.sector.maxLatitude <= -75) {
-                s *= 0.5;
+                s *= 2;
             }
             return tile.level.isLastLevel() || !tile.mustSubdivide(dc, s);
         };
@@ -1098,14 +1087,6 @@ define([
             if (!this.indices) {
                 this.buildIndices(tileWidth, tileHeight);
             }
-
-            if (!this.wireframeIndices) {
-                this.buildWireframeIndices(tileWidth, tileHeight);
-            }
-
-            if (!this.outlineIndices) {
-                this.buildOutlineIndices(tileWidth, tileHeight);
-            }
         };
 
         Tessellator.prototype.buildTexCoords = function (tileWidth, tileHeight) {
@@ -1147,7 +1128,7 @@ define([
             // There are tileHeight rows.
             // There are tileHeight + 2 columns
             var numIndices = 2 * (numLatVertices - 3) * (numLonVertices - 2) + 2 * (numLatVertices - 3);
-            var indices = new Int16Array(numIndices);
+            var indices = [];
 
             // Inset core by one round of sub-tiles. Full grid is numLatVertices x numLonVertices. This must be used
             // to address vertices in the core as well.
@@ -1171,9 +1152,9 @@ define([
                 indices[index++] = vertexIndex;
             }
 
-            // assert(index == numIndices);
-            this.indices = indices;
-            this.numIndices = numIndices;
+            this.baseIndicesOffset = indices.length - numIndices;
+            this.baseIndices = new Uint16Array(indices.slice(this.baseIndicesOffset));
+            this.numBaseIndices = numIndices;
 
             // TODO: parameterize and refactor!!!!!
             // Software engineering notes: There are patterns being used in the following code that should be abstracted.
@@ -1205,9 +1186,6 @@ define([
              */
             // North border.
             numIndices = 2 * numLonVertices - 2;
-            indices = new Int16Array(numIndices);
-
-            index = 0;
             latIndex = numLatVertices - 1;
 
             // Corner vertex.
@@ -1226,15 +1204,12 @@ define([
             vertexIndex = lonIndex + latIndex * numLonVertices;
             indices[index++] = vertexIndex;
 
-            // assert(index == numIndices);
-            this.indicesNorth = indices;
+            this.indicesNorthOffset = indices.length - numIndices;
+            this.indicesNorth = new Uint16Array(indices.slice(this.indicesNorthOffset));
             this.numIndicesNorth = numIndices;
 
             // South border.
             numIndices = 2 * numLonVertices - 2;
-            indices = new Int16Array(numIndices);
-
-            index = 0;
             latIndex = 0;
 
             // Corner vertex.
@@ -1253,15 +1228,12 @@ define([
             vertexIndex = lonIndex + latIndex * numLonVertices;
             indices[index++] = vertexIndex;
 
-            // assert(index == numIndices);
-            this.indicesSouth = indices;
+            this.indicesSouthOffset = indices.length - numIndices;
+            this.indicesSouth = new Uint16Array(indices.slice(this.indicesSouthOffset));
             this.numIndicesSouth = numIndices;
 
             // West border.
             numIndices = 2 * numLatVertices - 2;
-            indices = new Int16Array(numIndices);
-
-            index = 0;
             lonIndex = 0;
 
             // Corner vertex.
@@ -1280,15 +1252,12 @@ define([
             vertexIndex = lonIndex + latIndex * numLonVertices;
             indices[index++] = vertexIndex;
 
-            // assert(index == numIndices);
-            this.indicesWest = indices;
+            this.indicesWestOffset = indices.length - numIndices;
+            this.indicesWest = new Uint16Array(indices.slice(this.indicesWestOffset));
             this.numIndicesWest = numIndices;
 
             // East border.
             numIndices = 2 * numLatVertices - 2;
-            indices = new Int16Array(numIndices);
-
-            index = 0;
             lonIndex = numLonVertices - 1;
 
             // Corner vertex.
@@ -1307,8 +1276,8 @@ define([
             vertexIndex = lonIndex + latIndex * numLonVertices;
             indices[index++] = vertexIndex;
 
-            // assert(index == numIndices);
-            this.indicesEast = indices;
+            this.indicesEastOffset = indices.length - numIndices;
+            this.indicesEast = new Uint16Array(indices.slice(this.indicesEastOffset));
             this.numIndicesEast = numIndices;
 
             /*
@@ -1320,9 +1289,6 @@ define([
              */
             // North border.
             numIndices = 2 * numLonVertices - 2;
-            indices = new Int16Array(numIndices);
-
-            index = 0;
             latIndex = numLatVertices - 1;
 
             // Corner vertex.
@@ -1345,15 +1311,12 @@ define([
             vertexIndex = lonIndex + latIndex * numLonVertices;
             indices[index++] = vertexIndex;
 
-            // assert(index == numIndices);
-            this.indicesLoresNorth = indices;
+            this.indicesLoresNorthOffset = indices.length - numIndices;
+            this.indicesLoresNorth = new Uint16Array(indices.slice(this.indicesLoresNorthOffset));
             this.numIndicesLoresNorth = numIndices;
 
             // South border.
             numIndices = 2 * numLonVertices - 2;
-            indices = new Int16Array(numIndices);
-
-            index = 0;
             latIndex = 0;
 
             // Corner vertex.
@@ -1376,15 +1339,12 @@ define([
             vertexIndex = lonIndex + latIndex * numLonVertices;
             indices[index++] = vertexIndex;
 
-            // assert(index == numIndices);
-            this.indicesLoresSouth = indices;
+            this.indicesLoresSouthOffset = indices.length - numIndices;
+            this.indicesLoresSouth = new Uint16Array(indices.slice(this.indicesLoresSouthOffset));
             this.numIndicesLoresSouth = numIndices;
 
             // West border.
             numIndices = 2 * numLatVertices - 2;
-            indices = new Int16Array(numIndices);
-
-            index = 0;
             lonIndex = 0;
 
             // Corner vertex.
@@ -1407,15 +1367,12 @@ define([
             vertexIndex = lonIndex + latIndex * numLonVertices;
             indices[index++] = vertexIndex;
 
-            // assert(index == numIndices);
-            this.indicesLoresWest = indices;
+            this.indicesLoresWestOffset = indices.length - numIndices;
+            this.indicesLoresWest = new Uint16Array(indices.slice(this.indicesLoresWestOffset));
             this.numIndicesLoresWest = numIndices;
 
             // East border.
             numIndices = 2 * numLatVertices - 2;
-            indices = new Int16Array(numIndices);
-
-            index = 0;
             lonIndex = numLonVertices - 1;
 
             // Corner vertex.
@@ -1438,9 +1395,20 @@ define([
             vertexIndex = lonIndex + latIndex * numLonVertices;
             indices[index++] = vertexIndex;
 
-            // assert(index == numIndices);
-            this.indicesLoresEast = indices;
+            this.indicesLoresEastOffset = indices.length - numIndices;
+            this.indicesLoresEast = new Uint16Array(indices.slice(this.indicesLoresEastOffset));
             this.numIndicesLoresEast = numIndices;
+
+            var wireframeIndices = this.buildWireframeIndices(tileWidth, tileHeight);
+            var outlineIndices = this.buildOutlineIndices(tileWidth, tileHeight);
+
+            indices = indices.concat(wireframeIndices);
+            this.wireframeIndicesOffset = indices.length - this.numWireframeIndices;
+
+            indices = indices.concat(outlineIndices);
+            this.outlineIndicesOffset = indices.length - this.numOutlineIndices;
+
+            this.indices = new Uint16Array(indices);
         };
 
         Tessellator.prototype.buildWireframeIndices = function (tileWidth, tileHeight) {
@@ -1452,7 +1420,7 @@ define([
 
             // Allocate an array to hold the computed indices.
             var numIndices = 2 * tileWidth * numLatVertices + 2 * tileHeight * numLonVertices;
-            var indices = new Int16Array(numIndices);
+            var indices = [];
 
             var rowStride = numLonVertices;
 
@@ -1481,7 +1449,8 @@ define([
                 }
             }
 
-            this.wireframeIndices = indices;
+            this.numWireframeIndices = numIndices;
+            return indices;
         };
 
         Tessellator.prototype.buildOutlineIndices = function (tileWidth, tileHeight) {
@@ -1493,7 +1462,7 @@ define([
 
             // Allocate an array to hold the computed indices.
             var numIndices = 2 * (numLatVertices - 2) + 2 * numLonVertices + 1;
-            var indices = new Int16Array(numIndices);
+            var indices = [];
 
             var rowStride = numLatVertices;
 
@@ -1534,7 +1503,8 @@ define([
                 index += 1
             }
 
-            this.outlineIndices = indices;
+            this.numOutlineIndices = numIndices;
+            return indices;
         };
 
         Tessellator.prototype.cacheSharedGeometryVBOs = function (dc) {
@@ -1544,8 +1514,8 @@ define([
             var texCoordVbo = gpuResourceCache.resourceForKey(this.texCoordVboCacheKey);
             if (!texCoordVbo) {
                 texCoordVbo = gl.createBuffer();
-                gl.bindBuffer(WebGLRenderingContext.ARRAY_BUFFER, texCoordVbo);
-                gl.bufferData(WebGLRenderingContext.ARRAY_BUFFER, this.texCoords, WebGLRenderingContext.STATIC_DRAW);
+                gl.bindBuffer(gl.ARRAY_BUFFER, texCoordVbo);
+                gl.bufferData(gl.ARRAY_BUFFER, this.texCoords, gl.STATIC_DRAW);
                 dc.frameStatistics.incrementVboLoadCount(1);
                 gpuResourceCache.putResource(this.texCoordVboCacheKey, texCoordVbo, this.texCoords.length * 4 / 2);
             }
@@ -1553,100 +1523,10 @@ define([
             var indicesVbo = gpuResourceCache.resourceForKey(this.indicesVboCacheKey);
             if (!indicesVbo) {
                 indicesVbo = gl.createBuffer();
-                gl.bindBuffer(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, indicesVbo);
-                gl.bufferData(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, this.indices, WebGLRenderingContext.STATIC_DRAW);
+                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indicesVbo);
+                gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, this.indices, gl.STATIC_DRAW);
                 dc.frameStatistics.incrementVboLoadCount(1);
                 gpuResourceCache.putResource(this.indicesVboCacheKey, indicesVbo, this.indices.length * 2);
-            }
-
-            var indicesNorthVbo = gpuResourceCache.resourceForKey(this.indicesNorthVboCacheKey);
-            if (!indicesNorthVbo) {
-                indicesNorthVbo = gl.createBuffer();
-                gl.bindBuffer(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, indicesNorthVbo);
-                gl.bufferData(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, this.indicesNorth, WebGLRenderingContext.STATIC_DRAW);
-                dc.frameStatistics.incrementVboLoadCount(1);
-                gpuResourceCache.putResource(this.indicesNorthVboCacheKey, indicesNorthVbo, this.indicesNorth.length * 2);
-            }
-
-            var indicesSouthVbo = gpuResourceCache.resourceForKey(this.indicesSouthVboCacheKey);
-            if (!indicesSouthVbo) {
-                indicesSouthVbo = gl.createBuffer();
-                gl.bindBuffer(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, indicesSouthVbo);
-                gl.bufferData(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, this.indicesSouth, WebGLRenderingContext.STATIC_DRAW);
-                dc.frameStatistics.incrementVboLoadCount(1);
-                gpuResourceCache.putResource(this.indicesSouthVboCacheKey, indicesSouthVbo, this.indicesSouth.length * 2);
-            }
-
-            var indicesWestVbo = gpuResourceCache.resourceForKey(this.indicesWestVboCacheKey);
-            if (!indicesWestVbo) {
-                indicesWestVbo = gl.createBuffer();
-                gl.bindBuffer(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, indicesWestVbo);
-                gl.bufferData(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, this.indicesWest, WebGLRenderingContext.STATIC_DRAW);
-                dc.frameStatistics.incrementVboLoadCount(1);
-                gpuResourceCache.putResource(this.indicesWestVboCacheKey, indicesWestVbo, this.indicesWest.length * 2);
-            }
-
-            var indicesEastVbo = gpuResourceCache.resourceForKey(this.indicesEastVboCacheKey);
-            if (!indicesEastVbo) {
-                indicesEastVbo = gl.createBuffer();
-                gl.bindBuffer(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, indicesEastVbo);
-                gl.bufferData(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, this.indicesEast, WebGLRenderingContext.STATIC_DRAW);
-                dc.frameStatistics.incrementVboLoadCount(1);
-                gpuResourceCache.putResource(this.indicesEastVboCacheKey, indicesEastVbo, this.indicesEast.length * 2);
-            }
-
-            var indicesLoresNorthVbo = gpuResourceCache.resourceForKey(this.indicesLoresNorthVboCacheKey);
-            if (!indicesLoresNorthVbo) {
-                indicesLoresNorthVbo = gl.createBuffer();
-                gl.bindBuffer(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, indicesLoresNorthVbo);
-                gl.bufferData(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, this.indicesLoresNorth, WebGLRenderingContext.STATIC_DRAW);
-                dc.frameStatistics.incrementVboLoadCount(1);
-                gpuResourceCache.putResource(this.indicesLoresNorthVboCacheKey, indicesLoresNorthVbo, this.indicesLoresNorth.length * 2);
-            }
-
-            var indicesLoresSouthVbo = gpuResourceCache.resourceForKey(this.indicesLoresSouthVboCacheKey);
-            if (!indicesLoresSouthVbo) {
-                indicesLoresSouthVbo = gl.createBuffer();
-                gl.bindBuffer(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, indicesLoresSouthVbo);
-                gl.bufferData(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, this.indicesLoresSouth, WebGLRenderingContext.STATIC_DRAW);
-                dc.frameStatistics.incrementVboLoadCount(1);
-                gpuResourceCache.putResource(this.indicesLoresSouthVboCacheKey, indicesLoresSouthVbo, this.indicesLoresSouth.length * 2);
-            }
-
-            var indicesLoresWestVbo = gpuResourceCache.resourceForKey(this.indicesLoresWestVboCacheKey);
-            if (!indicesLoresWestVbo) {
-                indicesLoresWestVbo = gl.createBuffer();
-                gl.bindBuffer(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, indicesLoresWestVbo);
-                gl.bufferData(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, this.indicesLoresWest, WebGLRenderingContext.STATIC_DRAW);
-                dc.frameStatistics.incrementVboLoadCount(1);
-                gpuResourceCache.putResource(this.indicesLoresWestVboCacheKey, indicesLoresWestVbo, this.indicesLoresWest.length * 2);
-            }
-
-            var indicesLoresEastVbo = gpuResourceCache.resourceForKey(this.indicesLoresEastVboCacheKey);
-            if (!indicesLoresEastVbo) {
-                indicesLoresEastVbo = gl.createBuffer();
-                gl.bindBuffer(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, indicesLoresEastVbo);
-                gl.bufferData(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, this.indicesLoresEast, WebGLRenderingContext.STATIC_DRAW);
-                dc.frameStatistics.incrementVboLoadCount(1);
-                gpuResourceCache.putResource(this.indicesLoresEastVboCacheKey, indicesLoresEastVbo, this.indicesLoresEast.length * 2);
-            }
-
-            var outlineIndicesVbo = gpuResourceCache.resourceForKey(this.outlineIndicesVboCacheKey);
-            if (!outlineIndicesVbo) {
-                outlineIndicesVbo = gl.createBuffer();
-                gl.bindBuffer(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, outlineIndicesVbo);
-                gl.bufferData(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, this.outlineIndices, WebGLRenderingContext.STATIC_DRAW);
-                dc.frameStatistics.incrementVboLoadCount(1);
-                gpuResourceCache.putResource(this.outlineIndicesVboCacheKey, outlineIndicesVbo, this.outlineIndices.length * 2);
-            }
-
-            var wireframeIndicesVbo = gpuResourceCache.resourceForKey(this.wireframeIndicesVboCacheKey);
-            if (!wireframeIndicesVbo) {
-                wireframeIndicesVbo = gl.createBuffer();
-                gl.bindBuffer(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, wireframeIndicesVbo);
-                gl.bufferData(WebGLRenderingContext.ELEMENT_ARRAY_BUFFER, this.wireframeIndices, WebGLRenderingContext.STATIC_DRAW);
-                dc.frameStatistics.incrementVboLoadCount(1);
-                gpuResourceCache.putResource(this.wireframeIndicesVboCacheKey, wireframeIndicesVbo, this.wireframeIndices.length * 2);
             }
         };
 

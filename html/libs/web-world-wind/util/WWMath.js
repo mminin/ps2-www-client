@@ -60,7 +60,7 @@ define([
                 if (typeof Math.cbrt == 'function') {
                     return Math.cbrt(x);
                 } else {
-                    return Math.pow(x, 1/3);
+                    return Math.pow(x, 1 / 3);
                 }
             },
 
@@ -72,6 +72,7 @@ define([
              * @param {Vec3} result A pre-allocated Vec3 instance in which to return the computed point.
              * @returns {boolean} true if the line intersects the ellipsoid, otherwise false
              * @throws {ArgumentError} If the specified line or result is null or undefined.
+             * @deprecated utilize the Globe.intersectsLine method attached implementation
              */
             computeEllipsoidalGlobeIntersection: function (line, equatorialRadius, polarRadius, result) {
                 if (!line) {
@@ -143,7 +144,7 @@ define([
                 }
 
                 // Taken from Moller and Trumbore
-                // http://www.cs.virginia.edu/~gfx/Courses/2003/ImageSynthesis/papers/Acceleration/Fast%20MinimumStorage%20RayTriangle%20Intersection.pdf
+                // https://www.cs.virginia.edu/~gfx/Courses/2003/ImageSynthesis/papers/Acceleration/Fast%20MinimumStorage%20RayTriangle%20Intersection.pdf
 
                 var vx = line.direction[0],
                     vy = line.direction[1],
@@ -208,6 +209,58 @@ define([
                 }
             },
 
+            computeIndexedTrianglesIntersection: function (line, points, indices, results) {
+                if (!line) {
+                    throw new ArgumentError(Logger.logMessage(Logger.LEVEL_SEVERE, "WWMath",
+                        "computeIndexedTrianglesIntersection", "missingLine"));
+                }
+
+                if (!points) {
+                    throw new ArgumentError(Logger.logMessage(Logger.LEVEL_SEVERE, "WWMath",
+                        "computeIndexedTrianglesIntersection", "missingPoints"));
+                }
+
+                if (!indices) {
+                    throw new ArgumentError(Logger.logMessage(Logger.LEVEL_SEVERE, "WWMath",
+                        "computeIndexedTrianglesIntersection", "missingIndices"));
+                }
+
+                if (!results) {
+                    throw new ArgumentError(Logger.logMessage(Logger.LEVEL_SEVERE, "WWMath",
+                        "computeIndexedTrianglesIntersection", "missingResults"));
+                }
+
+                var v0 = new Vec3(0, 0, 0),
+                    v1 = new Vec3(0, 0, 0),
+                    v2 = new Vec3(0, 0, 0),
+                    iPoint = new Vec3(0, 0, 0);
+
+                for (var i = 0, len = indices.length; i < len; i += 3) {
+                    var i0 = 3 * indices[i],
+                        i1 = 3 * indices[i + 1],
+                        i2 = 3 * indices[i + 2];
+
+                    v0[0] = points[i0];
+                    v0[1] = points[i0 + 1];
+                    v0[2] = points[i0 + 2];
+
+                    v1[0] = points[i1];
+                    v1[1] = points[i1 + 1];
+                    v1[2] = points[i1 + 2];
+
+                    v2[0] = points[i2];
+                    v2[1] = points[i2 + 1];
+                    v2[2] = points[i2 + 2];
+
+                    if (WWMath.computeTriangleIntersection(line, v0, v1, v2, iPoint)) {
+                        results.push(iPoint);
+                        iPoint = new Vec3(0, 0, 0);
+                    }
+                }
+
+                return results.length > 0;
+            },
+
             /**
              * Computes the Cartesian intersection points of a specified line with a triangle strip. The triangle strip
              * is specified by a list of vertex points and a list of indices indicating the triangle strip tessellation
@@ -245,7 +298,7 @@ define([
                 }
 
                 // Taken from Moller and Trumbore
-                // http://www.cs.virginia.edu/~gfx/Courses/2003/ImageSynthesis/papers/Acceleration/Fast%20MinimumStorage%20RayTriangle%20Intersection.pdf
+                // https://www.cs.virginia.edu/~gfx/Courses/2003/ImageSynthesis/papers/Acceleration/Fast%20MinimumStorage%20RayTriangle%20Intersection.pdf
 
                 // Adapted from the original ray-triangle intersection algorithm to optimize for ray-triangle strip
                 // intersection. We optimize by reusing constant terms, replacing use of Vec3 with inline primitives,
@@ -706,6 +759,41 @@ define([
              */
             gudermannianInverse: function (latitude) {
                 return Math.log(Math.tan(Math.PI / 4 + (latitude * Angle.DEGREES_TO_RADIANS) / 2)) / Math.PI;
+            },
+
+            epsg3857ToEpsg4326: function (easting, northing) {
+                var r = 6.3781e6,
+                    latRadians = (Math.PI / 2) - 2 * Math.atan(Math.exp(-northing / r)),
+                    lonRadians = easting / r;
+
+                return [
+                    WWMath.clamp(latRadians * Angle.RADIANS_TO_DEGREES, -90, 90),
+                    WWMath.clamp(lonRadians * Angle.RADIANS_TO_DEGREES, -180, 180)
+                ];
+            },
+
+            /**
+             * Returns the value that is the nearest power of 2 less than or equal to the given value.
+             * @param {Number} value the reference value. The power of 2 returned is less than or equal to this value.
+             * @returns {Number} the value that is the nearest power of 2 less than or equal to the reference value
+             */
+            powerOfTwoFloor: function (value) {
+                var power = Math.floor(Math.log(value) / Math.log(2));
+                return Math.pow(2, power);
+            },
+
+            /**
+             * Restricts an angle to the range [0, 360] degrees, wrapping angles outside the range.
+             * Wrapping takes place as though traversing the edge of a unit circle;
+             * angles less than 0 wrap back to 360, while angles greater than 360 wrap back to 0.
+             *
+             * @param {Number} degrees the angle to wrap in degrees
+             *
+             * @return {Number} the specified angle wrapped to [0, 360] degrees
+             */
+            normalizeAngle360: function(degrees) {
+                var angle = degrees % 360;
+                return angle >= 0 ? angle : (angle < 0 ? 360 + angle : 360 - angle);
             }
         };
 

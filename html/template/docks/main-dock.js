@@ -3,7 +3,7 @@
 * and later on can be called in service.js by function add*Panel (e.g: addAvailableBaseMapsPanel)
 * And main-dock.js also need to call function from file *-panel.js (e.g: select-panel.js)
 * then inside each "add panels" function below, it can initialize the object of panel-function above (e.g: $("<div>").selectPanel({... )
-* So from 1 widget selectPanel (drop down box), it can be used to create many other drop down boxex with their own data.
+* So from 1 widget selectPanel (drop down box), it can be used to create many other drop down boxes with their own data.
 * (e.g: addProjectionSelectPanel() will use projectionNames array as data
      and addAvailableBaseMapsPanel() will use baseMapNames array as data)
 ***/
@@ -31,6 +31,9 @@ $(function() {
             }
             if (this.options.baseMaps) {
                 this.addAvailableBaseMapsPanel();
+            }
+            if (this.options.avalLayers) {
+                this.addAvailableLayersPanel();
             }
             if (this.options.queryTerminal) {
                 this.addQueryTerminalPanel();
@@ -80,6 +83,27 @@ $(function() {
                     self.baseMapsSelectPanel.setButtonContent(basemap);
                 }
                 self.baseMapsSelectPanel.addSelectOption(basemap.replace(/ /g, '').toLowerCase(), basemap);
+            });
+            return this;
+        },
+        // available layers Panel
+  // selectPanel is select-panel.js
+        addAvailableLayersPanel: function() {
+            this.LayersSelectPanel = $("<div>").selectPanel({
+                dock: this.dock,
+                panelId: "layers-selector",
+                panelTitle: "available Layers",
+                dropdownId: "availableLayersDropdown"
+            }).selectPanel("instance");
+
+            var self = this;
+
+            // Layers from selection-panel.js
+            $.each(layerNames, function(index, layer) {
+                if (index == 0) {
+                    self.LayersSelectPanel.setButtonContent(layer);
+                }
+                self.LayersSelectPanel.addSelectOption(layer.replace(/ /g, '').toLowerCase(), layer);
             });
             return this;
         },

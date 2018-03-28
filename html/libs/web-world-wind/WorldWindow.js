@@ -4,7 +4,7 @@
  */
 /**
  * @exports WorldWindow
- * @version $Id: WorldWindow.js 3319 2015-07-15 20:45:54Z dcollins $
+ * @version $Id: WorldWindow.js 3402 2015-08-14 17:28:09Z tgaskins $
  */
 define([
         './error/ArgumentError',
@@ -46,15 +46,17 @@ define([
         "use strict";
 
         /**
-         * Constructs a World Wind window for an HTML canvas.
+         * Constructs a WorldWind window for an HTML canvas.
          * @alias WorldWindow
          * @constructor
-         * @classdesc Represents a World Wind window for an HTML canvas.
+         * @classdesc Represents a WorldWind window for an HTML canvas.
          * @param {String} canvasName The name assigned to the HTML canvas in the document.
+         * @param {ElevationModel} elevationModel An optional argument indicating the elevation model to use for the World
+         * Window. If missing or null, a default elevation model is used.
          * @throws {ArgumentError} If there is no HTML element with the specified name in the document, or if the
          * HTML canvas does not support WebGL.
          */
-        var WorldWindow = function (canvasName) {
+        var WorldWindow = function (canvasName, elevationModel) {
             if (!(window.WebGLRenderingContext)) {
                 throw new ArgumentError(
                     Logger.logMessage(Logger.LEVEL_SEVERE, "WorldWindow", "constructor",
@@ -85,21 +87,21 @@ define([
             this.redrawRequestId = null;
 
             /**
-             * The HTML canvas associated with this World Window.
+             * The HTML canvas associated with this WorldWindow.
              * @type {HTMLElement}
              * @readonly
              */
             this.canvas = canvas;
 
             /**
-             * The number of bits in the depth buffer associated with this World Window.
+             * The number of bits in the depth buffer associated with this WorldWindow.
              * @type {number}
              * @readonly
              */
-            this.depthBits = gl.getParameter(WebGLRenderingContext.DEPTH_BITS);
+            this.depthBits = gl.getParameter(gl.DEPTH_BITS);
 
             /**
-             * The current viewport of this World Window.
+             * The current viewport of this WorldWindow.
              * @type {Rectangle}
              * @readonly
              */
@@ -109,13 +111,13 @@ define([
              * The globe displayed.
              * @type {Globe}
              */
-            this.globe = new Globe(new EarthElevationModel());
+            this.globe = new Globe(elevationModel || new EarthElevationModel());
 
             /**
-             * The layers to display in this world window.
+             * The layers to display in this WorldWindow.
              * This property is read-only. Use [addLayer]{@link WorldWindow#addLayer} or
-             * [insertLayer]{@link WorldWindow#insertLayer} to add layers to this world window.
-             * Use [removeLayer]{@link WorldWindow#removeLayer} to remove layers from this world window.
+             * [insertLayer]{@link WorldWindow#insertLayer} to add layers to this WorldWindow.
+             * Use [removeLayer]{@link WorldWindow#removeLayer} to remove layers from this WorldWindow.
              * @type {Layer[]}
              * @readonly
              */
@@ -145,7 +147,7 @@ define([
             this.deepPicking = false;
 
             /**
-             * Indicates whether this World Window should be configured for sub-surface rendering. If true, shapes
+             * Indicates whether this WorldWindow should be configured for sub-surface rendering. If true, shapes
              * below the terrain can be seen when the terrain is made transparent. If false, sub-surface shapes are
              * not visible, however, performance is slightly increased.
              * @type {boolean}
@@ -170,7 +172,7 @@ define([
             this.frameStatistics = new FrameStatistics();
 
             /**
-             * The {@link GoToAnimator} used by this world window to respond to its goTo method.
+             * The {@link GoToAnimator} used by this WorldWindow to respond to its goTo method.
              * @type {GoToAnimator}
              */
             this.goToAnimator = new GoToAnimator(this);
@@ -207,9 +209,9 @@ define([
 
             this.canvas.addEventListener("webglcontextrestored", handleContextRestored, false);
 
-            // Set up to handle WebGL context events and World Wind redraw request events. Imagery uses the canvas
+            // Set up to handle WebGL context events and WorldWind redraw request events. Imagery uses the canvas
             // redraw events because images are generally specific to the WebGL context associated with the canvas.
-            // Elevation models use the global window redraw events because they can be shared among world windows.
+            // Elevation models use the global window redraw events because they can be shared among WorldWindows.
             function handleRedrawEvent(event) {
                 thisWindow.handleRedrawEvent(event)
             }
@@ -243,7 +245,7 @@ define([
             },
             /**
              * The list of callbacks to call immediately before and immediately after performing a redraw. The callbacks
-             * have two arguments: this world window and the redraw stage, e.g., <code style='white-space:nowrap'>redrawCallback(worldWindow, stage);</code>.
+             * have two arguments: this WorldWindow and the redraw stage, e.g., <code style='white-space:nowrap'>redrawCallback(worldWindow, stage);</code>.
              * The stage will be either WorldWind.BEFORE_REDRAW or WorldWind.AFTER_REDRAW indicating whether the
              * callback has been called either immediately before or immediately after a redraw, respectively.
              * Applications may add functions to this array or remove them.
@@ -259,7 +261,7 @@ define([
         });
 
         /**
-         * Converts window coordinates to coordinates relative to this World Window's canvas.
+         * Converts window coordinates to coordinates relative to this WorldWindow's canvas.
          * @param {Number} x The X coordinate to convert.
          * @param {Number} y The Y coordinate to convert.
          * @returns {Vec2} The converted coordinates.
@@ -273,17 +275,17 @@ define([
         };
 
         /**
-         * Registers an event listener for the specified event type on this World Window's canvas. This function
-         * delegates the processing of events to the World Window's canvas. For details on this function and its
-         * arguments, see the W3C [EventTarget]{@link http://www.w3.org/TR/DOM-Level-2-Events/events.html#Events-EventTarget}
+         * Registers an event listener for the specified event type on this WorldWindow's canvas. This function
+         * delegates the processing of events to the WorldWindow's canvas. For details on this function and its
+         * arguments, see the W3C [EventTarget]{@link https://www.w3.org/TR/DOM-Level-2-Events/events.html#Events-EventTarget}
          * documentation.
          *
-         * Registering event listeners using this function enables applications to prevent the World Window's default
-         * navigation behavior. To prevent default navigation behavior, call the [Event]{@link http://www.w3.org/TR/DOM-Level-2-Events/events.html#Events-Event}'s
+         * Registering event listeners using this function enables applications to prevent the WorldWindow's default
+         * navigation behavior. To prevent default navigation behavior, call the [Event]{@link https://www.w3.org/TR/DOM-Level-2-Events/events.html#Events-Event}'s
          * preventDefault method from within an event listener for any events the navigator should not respond to.
          *
          * When an event occurs, this calls the registered event listeners in order of reverse registration. Since the
-         * World Window registers its navigator event listeners first, application event listeners are called before
+         * WorldWindow registers its navigator event listeners first, application event listeners are called before
          * navigator event listeners.
          *
          * @param type The event type to listen for.
@@ -327,7 +329,7 @@ define([
         };
 
         /**
-         * Removes an event listener for the specified event type from this World Window's canvas. The listener must be
+         * Removes an event listener for the specified event type from this WorldWindow's canvas. The listener must be
          * the same object passed to addEventListener. Calling removeEventListener with arguments that do not identify a
          * currently registered listener has no effect.
          *
@@ -362,23 +364,23 @@ define([
         };
 
         /**
-         * Causes this World Window to redraw itself at the next available opportunity. The redraw occurs on the main
+         * Causes this WorldWindow to redraw itself at the next available opportunity. The redraw occurs on the main
          * thread at a time of the browser's discretion. Applications should call redraw after changing the World
          * Window's state, but should not expect that change to be reflected on screen immediately after this function
-         * returns. This is the preferred method for requesting a redraw of the World Window.
+         * returns. This is the preferred method for requesting a redraw of the WorldWindow.
          */
         WorldWindow.prototype.redraw = function () {
             this.redrawRequested = true; // redraw during the next animation frame
         };
 
         /**
-         * Requests the World Wind objects displayed at a specified screen-coordinate point.
+         * Requests the WorldWind objects displayed at a specified screen-coordinate point.
          *
          * If the point intersects the terrain, the returned list contains an object identifying the associated geographic
-         * position. This returns an empty list when nothing in the World Wind scene intersects the specified point.
+         * position. This returns an empty list when nothing in the WorldWind scene intersects the specified point.
          *
-         * @param pickPoint The point to examine in this World Window's screen coordinates.
-         * @returns {PickedObjectList} A list of picked World Wind objects at the specified pick point.
+         * @param pickPoint The point to examine in this WorldWindow's screen coordinates.
+         * @returns {PickedObjectList} A list of picked WorldWind objects at the specified pick point.
          * @throws {ArgumentError} If the specified pick point is null or undefined.
          */
         WorldWindow.prototype.pick = function (pickPoint) {
@@ -402,11 +404,11 @@ define([
         };
 
         /**
-         * Requests the position of the World Wind terrain at a specified screen-coordinate point. If the point
+         * Requests the position of the WorldWind terrain at a specified screen-coordinate point. If the point
          * intersects the terrain, the returned list contains a single object identifying the associated geographic
          * position. Otherwise this returns an empty list.
-         * @param pickPoint The point to examine in this World Window's screen coordinates.
-         * @returns {PickedObjectList} A list containing the picked World Wind terrain position at the specified point,
+         * @param pickPoint The point to examine in this WorldWindow's screen coordinates.
+         * @returns {PickedObjectList} A list containing the picked WorldWind terrain position at the specified point,
          * or an empty list if the point does not intersect the terrain.
          * @throws {ArgumentError} If the specified pick point is null or undefined.
          */
@@ -432,11 +434,11 @@ define([
         };
 
         /**
-         * Requests the World Wind objects displayed within a specified screen-coordinate region. This returns all
+         * Requests the WorldWind objects displayed within a specified screen-coordinate region. This returns all
          * objects that intersect the specified region, regardless of whether or not an object is actually visible, and
          * marks objects that are visible as on top.
          * @param {Rectangle} rectangle The screen coordinate rectangle identifying the region to search.
-         * @returns {PickedObjectList} A list of visible World Wind objects within the specified region.
+         * @returns {PickedObjectList} A list of visible WorldWind objects within the specified region.
          * @throws {ArgumentError} If the specified rectangle is null or undefined.
          */
         WorldWindow.prototype.pickShapesInRegion = function (rectangle) {
@@ -572,7 +574,7 @@ define([
                 gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
                 this.viewport = new Rectangle(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
 
-                // Cause this World Window to redraw with the new size.
+                // Cause this WorldWindow to redraw with the new size.
                 this.redrawRequested = true;
             }
         };
@@ -642,14 +644,17 @@ define([
         WorldWindow.prototype.doNormalRepaint = function () {
             this.createTerrain();
             this.clearFrame();
+            this.deferOrderedRendering = false;
             if (this.drawContext.pickingMode) {
                 if (this.drawContext.makePickFrustum()) {
                     this.doPick();
+                    this.resolvePick();
                 }
             } else {
                 this.doDraw();
                 if (this.subsurfaceMode && this.hasStencilBuffer) {
                     this.redrawSurface();
+                    this.drawScreenRenderables();
                 }
             }
         };
@@ -660,20 +665,31 @@ define([
             if (this.drawContext.pickingMode) {
                 if (this.drawContext.makePickFrustum()) {
                     this.pick2DContiguous();
+                    this.resolvePick();
                 }
             } else {
                 this.draw2DContiguous();
             }
         };
 
+        WorldWindow.prototype.resolvePick = function () {
+            if (this.drawContext.pickTerrainOnly) {
+                this.resolveTerrainPick();
+            } else if (this.drawContext.regionPicking) {
+                this.resolveRegionPick();
+            } else {
+                this.resolveTopPick();
+            }
+        };
+
         // Internal function. Intentionally not documented.
         WorldWindow.prototype.beginFrame = function () {
             var gl = this.drawContext.currentGlContext;
-            gl.enable(WebGLRenderingContext.BLEND);
-            gl.enable(WebGLRenderingContext.CULL_FACE);
-            gl.enable(WebGLRenderingContext.DEPTH_TEST);
-            gl.blendFunc(WebGLRenderingContext.ONE, WebGLRenderingContext.ONE_MINUS_SRC_ALPHA);
-            gl.depthFunc(WebGLRenderingContext.LEQUAL);
+            gl.enable(gl.BLEND);
+            gl.enable(gl.CULL_FACE);
+            gl.enable(gl.DEPTH_TEST);
+            gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+            gl.depthFunc(gl.LEQUAL);
 
             if (this.drawContext.pickingMode) {
                 this.drawContext.makePickFramebuffer();
@@ -684,16 +700,15 @@ define([
         // Internal function. Intentionally not documented.
         WorldWindow.prototype.endFrame = function () {
             var gl = this.drawContext.currentGlContext;
-            gl.disable(WebGLRenderingContext.BLEND);
-            gl.disable(WebGLRenderingContext.CULL_FACE);
-            gl.disable(WebGLRenderingContext.DEPTH_TEST);
-            gl.blendFunc(WebGLRenderingContext.ONE, WebGLRenderingContext.ZERO);
-            gl.depthFunc(WebGLRenderingContext.LESS);
+            gl.disable(gl.BLEND);
+            gl.disable(gl.CULL_FACE);
+            gl.disable(gl.DEPTH_TEST);
+            gl.blendFunc(gl.ONE, gl.ZERO);
+            gl.depthFunc(gl.LESS);
             gl.clearColor(0, 0, 0, 1);
 
-            if (this.drawContext.pickingMode) {
-                this.drawContext.bindFramebuffer(null);
-            }
+            this.drawContext.bindFramebuffer(null);
+            this.drawContext.bindProgram(null);
         };
 
         // Internal function. Intentionally not documented.
@@ -702,7 +717,7 @@ define([
                 gl = dc.currentGlContext;
 
             gl.clearColor(dc.clearColor.red, dc.clearColor.green, dc.clearColor.blue, dc.clearColor.alpha);
-            gl.clear(WebGLRenderingContext.COLOR_BUFFER_BIT | WebGLRenderingContext.DEPTH_BUFFER_BIT);
+            gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
         };
 
         // Internal function. Intentionally not documented.
@@ -711,9 +726,10 @@ define([
 
             if (this.subsurfaceMode && this.hasStencilBuffer) {
                 // Draw the surface and collect the ordered renderables.
-                this.drawContext.currentGlContext.disable(WebGLRenderingContext.STENCIL_TEST);
+                this.drawContext.currentGlContext.disable(this.drawContext.currentGlContext.STENCIL_TEST);
                 this.drawContext.surfaceShapeTileBuilder.clear();
                 this.drawLayers(true);
+                this.drawSurfaceRenderables();
                 this.drawContext.surfaceShapeTileBuilder.doRender(this.drawContext);
 
                 if (!this.deferOrderedRendering) {
@@ -723,11 +739,11 @@ define([
                     // drawn again, and the stencil buffer will ensure that they are drawn only where they overlap
                     // the fragments drawn by the ordered renderables.
                     this.drawContext.currentGlContext.clear(
-                        WebGLRenderingContext.DEPTH_BUFFER_BIT | WebGLRenderingContext.STENCIL_BUFFER_BIT);
-                    this.drawContext.currentGlContext.enable(WebGLRenderingContext.STENCIL_TEST);
-                    this.drawContext.currentGlContext.stencilFunc(WebGLRenderingContext.ALWAYS, 1, 1);
+                        this.drawContext.currentGlContext.DEPTH_BUFFER_BIT | this.drawContext.currentGlContext.STENCIL_BUFFER_BIT);
+                    this.drawContext.currentGlContext.enable(this.drawContext.currentGlContext.STENCIL_TEST);
+                    this.drawContext.currentGlContext.stencilFunc(this.drawContext.currentGlContext.ALWAYS, 1, 1);
                     this.drawContext.currentGlContext.stencilOp(
-                        WebGLRenderingContext.REPLACE, WebGLRenderingContext.REPLACE, WebGLRenderingContext.REPLACE);
+                        this.drawContext.currentGlContext.REPLACE, this.drawContext.currentGlContext.REPLACE, this.drawContext.currentGlContext.REPLACE);
                     this.drawOrderedRenderables();
 
                     this.drawContext.screenCreditController.drawCredits(this.drawContext);
@@ -735,10 +751,12 @@ define([
             } else {
                 this.drawContext.surfaceShapeTileBuilder.clear();
                 this.drawLayers(true);
+                this.drawSurfaceRenderables();
                 this.drawContext.surfaceShapeTileBuilder.doRender(this.drawContext);
 
                 if (!this.deferOrderedRendering) {
                     this.drawOrderedRenderables();
+                    this.drawScreenRenderables();
                 }
 
                 this.drawContext.screenCreditController.drawCredits(this.drawContext);
@@ -748,12 +766,15 @@ define([
         WorldWindow.prototype.redrawSurface = function () {
             // Draw the terrain and surface shapes but only where the current stencil buffer is non-zero.
             // The non-zero fragments are from drawing the ordered renderables previously.
-            this.drawContext.currentGlContext.stencilFunc(WebGLRenderingContext.EQUAL, 1, 1);
+            this.drawContext.currentGlContext.enable(this.drawContext.currentGlContext.STENCIL_TEST);
+            this.drawContext.currentGlContext.stencilFunc(this.drawContext.currentGlContext.EQUAL, 1, 1);
             this.drawContext.currentGlContext.stencilOp(
-                WebGLRenderingContext.KEEP, WebGLRenderingContext.KEEP, WebGLRenderingContext.KEEP);
+                this.drawContext.currentGlContext.KEEP, this.drawContext.currentGlContext.KEEP, this.drawContext.currentGlContext.KEEP);
             this.drawContext.surfaceShapeTileBuilder.clear();
             this.drawLayers(false);
+            this.drawSurfaceRenderables();
             this.drawContext.surfaceShapeTileBuilder.doRender(this.drawContext);
+            this.drawContext.currentGlContext.disable(this.drawContext.currentGlContext.STENCIL_TEST);
         };
 
         // Internal function. Intentionally not documented.
@@ -763,23 +784,43 @@ define([
             }
 
             if (!this.drawContext.pickTerrainOnly) {
-                this.drawContext.surfaceShapeTileBuilder.clear();
+                if (this.subsurfaceMode && this.hasStencilBuffer) {
+                    // Draw the surface and collect the ordered renderables.
+                    this.drawContext.currentGlContext.disable(this.drawContext.currentGlContext.STENCIL_TEST);
+                    this.drawContext.surfaceShapeTileBuilder.clear();
+                    this.drawLayers(true);
+                    this.drawSurfaceRenderables();
+                    this.drawContext.surfaceShapeTileBuilder.doRender(this.drawContext);
 
-                this.drawLayers(true);
+                    if (!this.deferOrderedRendering) {
+                        // Clear the depth and stencil buffers prior to rendering the ordered renderables. This allows
+                        // sub-surface renderables to be drawn beneath the terrain. Turn on stenciling to capture the
+                        // fragments that ordered renderables draw. The terrain and surface shapes will be subsequently
+                        // drawn again, and the stencil buffer will ensure that they are drawn only where they overlap
+                        // the fragments drawn by the ordered renderables.
+                        this.drawContext.currentGlContext.clear(
+                            this.drawContext.currentGlContext.DEPTH_BUFFER_BIT | this.drawContext.currentGlContext.STENCIL_BUFFER_BIT);
+                        this.drawContext.currentGlContext.enable(this.drawContext.currentGlContext.STENCIL_TEST);
+                        this.drawContext.currentGlContext.stencilFunc(this.drawContext.currentGlContext.ALWAYS, 1, 1);
+                        this.drawContext.currentGlContext.stencilOp(
+                            this.drawContext.currentGlContext.REPLACE, this.drawContext.currentGlContext.REPLACE, this.drawContext.currentGlContext.REPLACE);
+                        this.drawOrderedRenderables();
+                        this.drawContext.terrain.pick(this.drawContext);
+                        this.drawScreenRenderables();
+                    }
+                } else {
+                    this.drawContext.surfaceShapeTileBuilder.clear();
 
-                this.drawContext.surfaceShapeTileBuilder.doRender(this.drawContext);
+                    this.drawLayers(true);
+                    this.drawSurfaceRenderables();
 
-                if (!this.deferOrderedRendering) {
-                    this.drawOrderedRenderables();
+                    this.drawContext.surfaceShapeTileBuilder.doRender(this.drawContext);
+
+                    if (!this.deferOrderedRendering) {
+                        this.drawOrderedRenderables();
+                        this.drawScreenRenderables();
+                    }
                 }
-            }
-
-            if (this.drawContext.pickTerrainOnly) {
-                this.resolveTerrainPick();
-            } else if (this.drawContext.regionPicking) {
-                this.resolveRegionPick();
-            } else {
-                this.resolveTopPick();
             }
         };
 
@@ -883,6 +924,8 @@ define([
                     this.redrawSurface();
                 }
             }
+
+            this.drawScreenRenderables();
         };
 
         WorldWindow.prototype.pick2DContiguous = function () {
@@ -936,17 +979,17 @@ define([
         };
 
         /**
-         * Adds a specified layer to the end of this world window.
-         * @param {Layer} layer The layer to add. May be null or undefined, in which case this world window is not modified.
+         * Adds a specified layer to the end of this WorldWindow.
+         * @param {Layer} layer The layer to add. May be null or undefined, in which case this WorldWindow is not modified.
          */
         WorldWindow.prototype.addLayer = function (layer) {
             this.layers.push(layer);
         };
 
         /**
-         * Removes the first instance of a specified layer from this world window.
-         * @param {Layer} layer The layer to remove. May be null or undefined, in which case this world window is not
-         * modified. This world window is also not modified if the specified layer does not exist in this world
+         * Removes the first instance of a specified layer from this WorldWindow.
+         * @param {Layer} layer The layer to remove. May be null or undefined, in which case this WorldWindow is not
+         * modified. This WorldWindow is also not modified if the specified layer does not exist in this world
          * window's layer list.
          */
         WorldWindow.prototype.removeLayer = function (layer) {
@@ -967,15 +1010,33 @@ define([
         };
 
         /**
-         * Inserts a specified layer at a specified position in this world window's layer list.
+         * Inserts a specified layer at a specified position in this WorldWindow's layer list.
          * @param {number} index The index at which to insert the layer. May be negative to specify the position
          * from the end of the array.
-         * @param {Layer} layer The layer to insert. This world window's layer list is not changed if the specified
+         * @param {Layer} layer The layer to insert. This WorldWindow's layer list is not changed if the specified
          * layer is null or undefined.
          */
         WorldWindow.prototype.insertLayer = function (index, layer) {
             if (layer) {
                 this.layers.splice(index, 0, layer);
+            }
+        };
+
+        // Internal function. Intentionally not documented.
+        WorldWindow.prototype.drawSurfaceRenderables = function () {
+            var dc = this.drawContext,
+                sr;
+
+            dc.reverseSurfaceRenderables();
+
+            while (sr = dc.popSurfaceRenderable()) {
+                try {
+                    sr.renderSurface(dc);
+                } catch (e) {
+                    Logger.logMessage(Logger.LEVEL_WARNING, "WorldWindow", "drawSurfaceRenderables",
+                        "Error while rendering a surface renderable.\n" + e.message);
+                    // Keep going. Render the rest of the surface renderables.
+                }
             }
         };
 
@@ -1000,13 +1061,28 @@ define([
                     or.renderOrdered(dc);
                 } catch (e) {
                     Logger.logMessage(Logger.LEVEL_WARNING, "WorldWindow", "drawOrderedRenderables",
-                        "Error while rendering a shape:" + e.message);
+                        "Error while rendering an ordered renderable.\n" + e.message);
                     // Keep going. Render the rest of the ordered renderables.
                 }
             }
 
             dc.orderedRenderingMode = false;
             dc.frameStatistics.orderedRenderingTime = Date.now() - beginTime;
+        };
+
+        WorldWindow.prototype.drawScreenRenderables = function () {
+            var dc = this.drawContext,
+                or;
+
+            while (or = dc.nextScreenRenderable()) {
+                try {
+                    or.renderOrdered(dc);
+                } catch (e) {
+                    Logger.logMessage(Logger.LEVEL_WARNING, "WorldWindow", "drawOrderedRenderables",
+                        "Error while rendering a screen renderable.\n" + e.message);
+                    // Keep going. Render the rest of the screen renderables.
+                }
+            }
         };
 
         // Internal function. Intentionally not documented.
@@ -1117,12 +1193,12 @@ define([
         };
 
         /**
-         * Moves this world window's navigator to a specified location or position.
+         * Moves this WorldWindow's navigator to a specified location or position.
          * @param {Location | Position} position The location or position to move the navigator to. If this
          * argument contains an "altitude" property, as {@link Position} does, the end point of the navigation is
          * at the specified altitude. Otherwise the end point is at the current altitude of the navigator.
          *
-         * This function uses this world window's {@link GoToAnimator} property to perform the move. That object's
+         * This function uses this WorldWindow's {@link GoToAnimator} property to perform the move. That object's
          * properties can be specified by the application to modify its behavior during calls to this function.
          * It's cancel method can also be used to cancel the move initiated by this function.
          * @param {Function} completionCallback If not null or undefined, specifies a function to call when the
@@ -1135,7 +1211,7 @@ define([
 
         /**
          * Declutters the current ordered renderables with a specified group ID. This function is not called by
-         * applications directly. It's meant to be invoked as an ordered rendering filter in this World Window's
+         * applications directly. It's meant to be invoked as an ordered rendering filter in this WorldWindow's
          * [orderedRenderingFilters]{@link WorldWindow#orderedRenderingFilters} property.
          * <p>
          * The function operates by setting the target visibility of occluded shapes to 0 and unoccluded shapes to 1.

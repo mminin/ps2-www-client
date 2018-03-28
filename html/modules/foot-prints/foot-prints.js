@@ -5,27 +5,54 @@ var lastCovID;
 var shapes = []; // footprints shape
 var attributes = ""; // attirbutes for footprints shape
 
+// cache all the footprints by data_type
+var cachedArray = [];
+
+// the date stored in database is slightly different from the DescribeCoverage values for East, North
+var EPSILON = 0.00001;
 
 // Create constructor for dataset object
-function DataSetConstructor(coverageID, Easternmost_longitude, Maximum_latitude, Minimum_latitude, Westernmost_longitude, latList, longList, isLoadedImage) {
+function DataSetConstructor(coverageID, easternmost_longitude, maximum_latitude, minimum_latitude, westernmost_longitude, latList, longList, isLoadedImage, centroid_longitude, width, height, resolution, minimum_east, minimum_north, maximum_east, maximum_north) {
     this.coverageID = coverageID;
-    this.Easternmost_longitude = Easternmost_longitude;
-    this.Maximum_latitude = Maximum_latitude;
-    this.Minimum_latitude = Minimum_latitude;
-    this.Westernmost_longitude = Westernmost_longitude;
+    if (easternmost_longitude > 180) { //long in www spans from -180 to 180, if its bigger than 180 = -360
+        easternmost_longitude = easternmost_longitude - 360;        
+    }
+    if (westernmost_longitude > 180) {
+        westernmost_longitude = westernmost_longitude - 360;
+    }
+    this.easternmost_longitude = easternmost_longitude;
+    this.maximum_latitude = maximum_latitude;
+    this.minimum_latitude = minimum_latitude;
+    this.westernmost_longitude = westernmost_longitude;
     this.latList = latList;
     this.longList = longList;
 
     // check if it is loaded-image or not
     this.isLoadedImage = isLoadedImage;
+
+    this.centroid_longitude = centroid_longitude;
+
+    this.width = width;
+    this.height = height;
+    this.resolution = resolution;
+    this.minimum_east = minimum_east + EPSILON;
+    this.minimum_north = minimum_north + EPSILON;
+    this.maximum_east = maximum_east - EPSILON;
+    this.maximum_north = maximum_north - EPSILON;
 }
 
-function CheckedDataSetConstructor(coverageID, Easternmost_longitude, Maximum_latitude, Minimum_latitude, Westernmost_longitude, latList, longList, latClickedPoint, longClickedPoint, shapeObj) {
+function CheckedDataSetConstructor(coverageID, easternmost_longitude, maximum_latitude, minimum_latitude, westernmost_longitude, latList, longList, latClickedPoint, longClickedPoint, shapeObj, wcpsQuery, centroid_longitude, width, height, resolution, minimum_east, minimum_north, maximum_east, maximum_north) {
     this.coverageID = coverageID;
-    this.Easternmost_longitude = Easternmost_longitude;
-    this.Maximum_latitude = Maximum_latitude;
-    this.Minimum_latitude = Minimum_latitude;
-    this.Westernmost_longitude = Westernmost_longitude;
+    if (easternmost_longitude > 180) { //long in www spans from -180 to 180, if its bigger than 180 = -360
+        easternmost_longitude = easternmost_longitude - 360;        
+    }
+    if (westernmost_longitude > 180) {
+        westernmost_longitude = westernmost_longitude - 360;
+    }
+    this.easternmost_longitude = easternmost_longitude;
+    this.maximum_latitude = maximum_latitude;
+    this.minimum_latitude = minimum_latitude;
+    this.westernmost_longitude = westernmost_longitude;
     this.latList = latList;
     this.longList = longList;
 
@@ -36,25 +63,58 @@ function CheckedDataSetConstructor(coverageID, Easternmost_longitude, Maximum_la
 
     // store the shape object to set attribute of shape faster
     this.shapeObj = shapeObj;
+
+    // WCPS query to download
+    this.wcpsQuery = wcpsQuery;
+
+    this.centroid_longitude = centroid_longitude;
+
+    this.width = width;
+    this.height = height;
+    this.resolution = resolution;
+    this.minimum_east = minimum_east;
+    this.minimum_north = minimum_north;
+    this.maximum_east = maximum_east;
+    this.maximum_north = maximum_north;
 }
 
-// when page loads then load all footprints
-$.ajax({
-    type: "get",
-    url: "http://access.planetserver.eu:8080/ps2/" + "dataset",
-    data: "request=getAllCoverages",
-    dataType: 'json',
-    cache: false,
-    async: false, // this needs time to query all footprints from database and load to WWW then the problem with cache is done.
-    success: function(data) {
-        $.each(data, function(key, val) {
-            var dataSetFootPrint = new DataSetConstructor(val.coverageID, val.Easternmost_longitude, val.Maximum_latitude, val.Minimum_latitude, val.Westernmost_longitude, val.latList, val.longList, false);
 
-            // push this dataSet to array for displaying later
-            allFootPrintsArray.push(dataSetFootPrint);
+
+// load all footprints data to an array
+function getAllFootprintsFromDatabase() {
+
+    allFootPrintsArray = [];
+
+    // check if data_type alread cached then no need to load from database
+    if (cachedArray[dataType] != null) {
+        allFootPrintsArray = cachedArray[dataType];        
+    } else {
+        // when page loads then load all footprints (mars: mars_trdr)
+        var getAllCoverageDataByType = "request=getAllCoverages&type=" + dataType;
+
+
+        $.ajax({
+            type: "get",
+            url: ps2EndPoint + "/ps2/" + "dataset",
+            data: getAllCoverageDataByType,
+            dataType: 'json',
+            cache: false,
+            async: false, // this needs time to query all footprints from database and load to WWW then the problem with cache is done.
+            success: function(data) {
+                $.each(data, function(key, val) {
+                    var dataSetFootPrint = new DataSetConstructor(val.coverageID, val.easternmost_longitude, val.maximum_latitude, val.minimum_latitude, val.westernmost_longitude, val.latList, val.longList, false, val.centroid_longitude, val.width, val.height, val.resolution, val.minimum_east, val.minimum_north, val.maximum_east, val.maximum_north);
+
+                    // push this dataSet to array for displaying later
+                    allFootPrintsArray.push(dataSetFootPrint);
+
+                    // store all the footprints arrat to cache
+                    cachedArray[dataType] = allFootPrintsArray;
+                });
+            }
         });
     }
-});
+}
+
 
 // get footprints containing clicked point for left click
 function getFootPrintsContainingPointLeftClick(shapesArray, attributesObj, checkedAttributes, latitude, longitude) {
@@ -72,10 +132,11 @@ function getFootPrintsContainingPointLeftClick(shapesArray, attributesObj, check
     //alert(shapes.length);
     // only load images when click on footprints (and when click to select new footprints)
     var isUpdateCheckedFootPrintsArray = false;
+    var getCoveragesContainingPointData = "request=getCoveragesContainingPoint&type=" + dataType + "&latPoint=" + latitude + "&longPoint=" + longitude;
     $.ajax({
         type: "get",
-        url: "http://access.planetserver.eu:8080/ps2/" + "dataset",
-        data: "request=getCoveragesContainingPoint&latPoint=" + latitude + "&longPoint=" + longitude,
+        url: ps2EndPoint + "/ps2/" + "dataset",
+        data: getCoveragesContainingPointData,
         dataType: 'json',
         cache: false,
         async: false,
@@ -83,11 +144,11 @@ function getFootPrintsContainingPointLeftClick(shapesArray, attributesObj, check
 	    if(data.length === 0) {
 	      return;
 	    } else {
-            	console.log("Get footprints containing point:" + " request=getCoveragesContainingPoint&latPoint=" + latitude + "&longPoint=" + longitude);
+            	console.log("Get footprints containing point:" + getCoveragesContainingPointData);
 	    }
 
             $.each(data, function(key, val) {
-                var dataSetFootPrint = new CheckedDataSetConstructor(val.coverageID, val.Easternmost_longitude, val.Maximum_latitude, val.Minimum_latitude, val.Westernmost_longitude, val.latList, val.longList, latitude, longitude, null);
+                var dataSetFootPrint = new CheckedDataSetConstructor(val.coverageID, val.easternmost_longitude, val.maximum_latitude, val.minimum_latitude, val.westernmost_longitude, val.latList, val.longList, latitude, longitude, null, "", val.centroid_longitude, val.width, val.height, val.resolution, val.minimum_east, val.minimum_north, val.maximum_east, val.maximum_north);
 
                 // Get the last clicked coverageID to draw the chart when clicking on loaded image
                 lastCovID = val.coverageID;
@@ -181,17 +242,19 @@ function getFootPrintsContainingPointRightClick(shapesArray, attributesObj, chec
     // clear the containedFootPrintsArray and get the news one from footprint.js
     containedFootPrintsArray = [];
 
+    var getCoveragesContainingPointData = "request=getCoveragesContainingPoint&type=" + dataType + "&latPoint=" + latitude + "&longPoint=" + longitude
     $.ajax({
         type: "get",
-        url: "http://access.planetserver.eu:8080/ps2/" + "dataset",
-        data: "request=getCoveragesContainingPoint&latPoint=" + latitude + "&longPoint=" + longitude,
+        url: ps2EndPoint + "/ps2/" + "dataset",
+        data: getCoveragesContainingPointData,
         dataType: 'json',
         cache: false,
         async: false,
         success: function(data) {
-            console.log("Get footprints containing point for right click:" + " request=getCoveragesContainingPoint&latPoint=" + latitude + "&longPoint=" + longitude);
+            console.log("Get footprints containing point for right click:" + getCoveragesContainingPointData);
             $.each(data, function(key, val) {
-                var dataSetFootPrint = new CheckedDataSetConstructor(val.coverageID, val.Easternmost_longitude, val.Maximum_latitude, val.Minimum_latitude, val.Westernmost_longitude, val.latList, val.longList, latitude, longitude, false, false);
+                var dataSetFootPrint = new CheckedDataSetConstructor(val.coverageID, val.easternmost_longitude, val.maximum_latitude, val.minimum_latitude, val.westernmost_longitude, val.latList, val.longList, latitude, longitude, false, false, "",
+                    val.centroid_longitude, val.width, val.height, val.resolution, val.minimum_east, val.minimum_north, val.maximum_east, val.maximum_north);
                 console.log("mememe: " + val.coverageID);
 
                 // Get the last clicked coverageID to draw the chart when clicking on loaded image
@@ -211,17 +274,14 @@ function getFootPrintsContainingPointRightClick(shapesArray, attributesObj, chec
 // in checked footprints table, user uncheck row then remove this row and uncheck the footprint also
 window.removeCheckedFootPrintRow = function(checkboxObj) {
     //var r = confirm("Do you want to uncheck this footprint?");
-    r = true;
-    if (r == true) {
-        // call this function from Footprints.js to update the content of checked table
-        var coverageID = checkboxObj.value;
+    // call this function from Footprints.js to update the content of checked table
+    var coverageID = checkboxObj.value;
 
-        // remove this coverageID from checkedFootPrintsArray
-        removeCheckedFootPrint(coverageID);
+    // remove this coverageID from checkedFootPrintsArray
+    removeCheckedFootPrint(coverageID);
 
-        // update the content of selected dropdown box
-        updateCheckedFootPrintsDropdownBox();
-    }
+    // update the content of selected dropdown box
+    updateCheckedFootPrintsDropdownBox();
 }
 
 // this function will remove the checkedCoverage same ID with coverageID and change attribute of this coverage to unchecked
@@ -230,14 +290,17 @@ function removeCheckedFootPrint(coverageID) {
     for (var i = 0; i < checkedFootPrintsArray.length; i++) {
         if (checkedFootPrintsArray[i].coverageID === coverageID) {
 
-            //clear the old loaded image first
-            renderLayer[i].removeAllRenderables();
+            if (renderLayer.length > 0) {
+                //clear the old loaded image first
+                renderLayer[i].removeAllRenderables();
+
+                // remove render layer which contains footprint also
+                renderLayer.splice(i, 1);
+            }
 
             // remove coverageID from checkedFootPrintsArray
             checkedFootPrintsArray.splice(i, 1);
 
-            // remove render layer which contains footprint also
-            renderLayer.splice(i, 1);
 
             // Change footprint to unchecked footprint
             for (j = 0; j < shapes.length; j++) {
@@ -249,6 +312,19 @@ function removeCheckedFootPrint(coverageID) {
             break;
         }
     }
+
+    // Remove all the tiling footprints of coverageID (moon client)
+    for (var i = renderLayerTiles.length; i--;) {
+        if (renderLayerTiles[i]._displayName === coverageID) {
+            // clear the tiles loaded image first
+            renderLayerTiles[i].removeAllRenderables();
+
+            // remove the footprints tile
+            renderLayerTiles.splice(i, 1);
+        }
+    }
+
+    updateCheckedFootPrintsDropdownBox();
 }
 
 function replaceAll(template, target, replacement) {
@@ -295,13 +371,15 @@ function removeAllSelectedFootPrints() {
     // remove the blue color first
     for (var i = 0; i < checkedFootPrintsArray.length; i++) {
 
-        //clear the old loaded image first
-        renderLayer[i].removeAllRenderables();
+        if (renderLayer.length > 0) {
+            //clear the old loaded image first
+            renderLayer[i].removeAllRenderables();
+        }
 
         //alert(renderLayer[i]);
 
         // Change footprint to unchecked footprint
-        for (j = 0; j < shapes.length; j++) {
+        for (var j = 0; j < shapes.length; j++) {
             if (shapes[j]._displayName === checkedFootPrintsArray[i].coverageID) {
 
                 // uncheck footprints by setting to red color
@@ -310,8 +388,15 @@ function removeAllSelectedFootPrints() {
         }
     }
 
+    // clear all the temporary tilings footprints (moon client)
+    for (var i = 0; i < renderLayerTiles.length; i++) {
+        renderLayerTiles[i].removeAllRenderables();
+    }
+
     // then clear array
     checkedFootPrintsArray = [];
+
+    renderLayerTiles = [];
 
     // clear the dropdown box
     updateCheckedFootPrintsDropdownBox();

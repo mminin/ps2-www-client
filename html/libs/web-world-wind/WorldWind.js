@@ -3,29 +3,37 @@
  * National Aeronautics and Space Administration. All Rights Reserved.
  */
 /**
- * @version $Id: WorldWind.js 3314 2015-07-10 18:28:45Z dcollins $
+ * @version $Id: WorldWind.js 3418 2015-08-22 00:17:05Z tgaskins $
  */
 define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not directory name).
         './error/AbstractError',
         './geom/Angle',
+        './shapes/Annotation',
+        './shapes/AnnotationAttributes',
+        './util/measure/AreaMeasurer',
         './error/ArgumentError',
+        './layer/AtmosphereLayer',
+        './shaders/AtmosphereProgram',
         './shaders/BasicProgram',
         './shaders/BasicTextureProgram',
+        './util/BasicTimeSequence',
         './layer/BingAerialLayer',
         './layer/BingAerialWithLabelsLayer',
         './layer/BingRoadsLayer',
         './layer/BingWMSLayer',
-        './layer/BlueMarbleLayer',
         './layer/BMNGLandsatLayer',
         './layer/BMNGLayer',
         './layer/BMNGOneImageLayer',
         './layer/BMNGRestLayer',
         './geom/BoundingBox',
         './gesture/ClickRecognizer',
+        './formats/collada/ColladaLoader',
         './util/Color',
         './shapes/Compass',
         './layer/CompassLayer',
         './layer/CoordinatesDisplayLayer',
+        './util/Date',
+        './layer/DigitalGlobeTiledImageLayer',
         './gesture/DragRecognizer',
         './render/DrawContext',
         './globe/EarthElevationModel',
@@ -33,6 +41,7 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
         './globe/ElevationModel',
         './util/Font',
         './util/FrameStatistics',
+        './layer/FrameStatisticsLayer',
         './render/FramebufferTexture',
         './render/FramebufferTile',
         './render/FramebufferTileController',
@@ -40,6 +49,16 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
         './shapes/GeographicMesh',
         './projections/GeographicProjection',
         './shapes/GeographicText',
+        './formats/geojson/GeoJSONGeometry',
+        './formats/geojson/GeoJSONGeometryCollection',
+        './formats/geojson/GeoJSONGeometryLineString',
+        './formats/geojson/GeoJSONGeometryMultiLineString',
+        './formats/geojson/GeoJSONGeometryMultiPoint',
+        './formats/geojson/GeoJSONGeometryMultiPolygon',
+        './formats/geojson/GeoJSONGeometryPoint',
+        './formats/geojson/GeoJSONGeometryPolygon',
+        './formats/geojson/GeoJSONParser',
+        './formats/geotiff/GeoTiffReader',
         './gesture/GestureRecognizer',
         './globe/Globe',
         './globe/Globe2D',
@@ -47,11 +66,66 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
         './shaders/GpuProgram',
         './cache/GpuResourceCache',
         './shaders/GpuShader',
+        './shaders/GroundProgram',
+        './util/HashMap',
         './util/HighlightController',
+        './formats/kml/util/ImagePyramid',
         './util/ImageSource',
         './render/ImageTile',
+        './util/Insets',
+        './formats/kml/util/ItemIcon',
+        './formats/kml/KmlAbstractView',
+        './formats/kml/styles/KmlBalloonStyle',
+        './formats/kml/KmlCamera',
+        './formats/kml/styles/KmlColorStyle',
+        './formats/kml/features/KmlContainer',
+        './formats/kml/controls/KmlControls',
+        './formats/kml/features/KmlDocument',
+        './formats/kml/KmlElements',
+        './formats/kml/features/KmlFeature',
+        './formats/kml/KmlFile',
+        './formats/kml/features/KmlFolder',
+        './formats/kml/geom/KmlGeometry',
+        './formats/kml/features/KmlGroundOverlay',
+        './formats/kml/KmlIcon',
+        './formats/kml/styles/KmlIconStyle',
+        './formats/kml/styles/KmlLabelStyle',
+        './formats/kml/KmlLatLonAltBox',
+        './formats/kml/KmlLatLonBox',
+        './formats/kml/KmlLatLonQuad',
+        './formats/kml/geom/KmlLinearRing',
+        './formats/kml/geom/KmlLineString',
+        './formats/kml/styles/KmlLineStyle',
+        './formats/kml/KmlLink',
+        './formats/kml/styles/KmlListStyle',
+        './formats/kml/KmlLocation',
+        './formats/kml/KmlLod',
+        './formats/kml/KmlLookAt',
+        './formats/kml/geom/KmlMultiGeometry',
+        './formats/kml/features/KmlNetworkLink',
+        './formats/kml/KmlObject',
+        './formats/kml/KmlOrientation',
+        './formats/kml/features/KmlOverlay',
+        './formats/kml/features/KmlPhotoOverlay',
+        './formats/kml/features/KmlPlacemark',
+        './formats/kml/geom/KmlPoint',
+        './formats/kml/geom/KmlPolygon',
+        './formats/kml/styles/KmlPolyStyle',
+        './formats/kml/KmlRegion',
+        './formats/kml/features/KmlScreenOverlay',
+        './formats/kml/styles/KmlStyle',
+        './formats/kml/styles/KmlStyleMap',
+        './formats/kml/styles/KmlStyleSelector',
+        './formats/kml/styles/KmlSubStyle',
+        './formats/kml/KmlTimePrimitive',
+        './formats/kml/KmlTimeSpan',
+        './formats/kml/KmlTimeStamp',
+        './formats/kml/features/KmlTour',
+        './formats/kml/geom/KmlTrack',
+        './formats/kml/controls/KmlTreeVisibility',
         './layer/LandsatRestLayer',
         './layer/Layer',
+        './util/measure/LengthMeasurer',
         './util/Level',
         './util/LevelRowColumnUrlBuilder',
         './util/LevelSet',
@@ -60,6 +134,7 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
         './util/Logger',
         './navigate/LookAtNavigator',
         './geom/Matrix',
+        './util/measure/MeasurerUtils',
         './cache/MemoryCache',
         './cache/MemoryCacheListener',
         './layer/MercatorTiledImageLayer',
@@ -68,10 +143,11 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
         './util/NominatimGeocoder',
         './error/NotYetImplementedError',
         './util/Offset',
-        './layer/OneImageLayer',
         './layer/OpenStreetMapImageLayer',
+        './formats/kml/util/Pair',
         './gesture/PanRecognizer',
         './shapes/Path',
+        './util/PeriodicTimeSequence',
         './pick/PickedObject',
         './pick/PickedObjectList',
         './gesture/PinchRecognizer',
@@ -79,28 +155,38 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
         './shapes/PlacemarkAttributes',
         './geom/Plane',
         './shapes/Polygon',
+        './util/PolygonSplitter',
         './geom/Position',
         './projections/ProjectionEquirectangular',
         './projections/ProjectionGnomonic',
         './projections/ProjectionMercator',
         './projections/ProjectionPolarEquidistant',
         './projections/ProjectionUPS',
+        './projections/ProjectionWgs84',
         './geom/Rectangle',
         './render/Renderable',
         './layer/RenderableLayer',
+        './layer/RestTiledImageLayer',
         './gesture/RotationRecognizer',
+        './formats/kml/util/Scale',
+        './formats/kml/util/Schema',
         './shapes/ScreenImage',
         './shapes/ScreenText',
         './geom/Sector',
         './shapes/ShapeAttributes',
         './formats/shapefile/Shapefile',
         './layer/ShowTessellationLayer',
+        './shaders/SkyProgram',
+        './layer/StarFieldLayer',
+        './shaders/StarFieldProgram',
+        './util/SunPosition',
         './shapes/SurfaceImage',
         './shapes/SurfaceCircle',
         './shapes/SurfaceEllipse',
         './shapes/SurfacePolygon',
         './shapes/SurfacePolyline',
         './shapes/SurfaceRectangle',
+        './render/SurfaceRenderable',
         './shapes/SurfaceSector',
         './shapes/SurfaceShape',
         './shapes/SurfaceShapeTile',
@@ -109,6 +195,7 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
         './render/SurfaceTileRenderer',
         './shaders/SurfaceTileRendererProgram',
         './gesture/TapRecognizer',
+        './layer/TectonicPlatesLayer',
         './globe/Terrain',
         './globe/TerrainTile',
         './globe/TerrainTileList',
@@ -123,38 +210,69 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
         './util/TileFactory',
         './gesture/TiltRecognizer',
         './gesture/Touch',
+        './shapes/TriangleMesh',
         './error/UnsupportedOperationError',
         './geom/Vec2',
         './geom/Vec3',
         './layer/ViewControlsLayer',
-        './ogc/WmsCapabilities',
+        './formats/kml/util/ViewVolume',
+        './util/WcsTileUrlBuilder',
+        './ogc/WfsCapabilities',
+        './formats/wkt/Wkt',
+        './formats/wkt/WktElements',
+        './formats/wkt/geom/WktGeometryCollection',
+        './formats/wkt/geom/WktLineString',
+        './formats/wkt/geom/WktMultiLineString',
+        './formats/wkt/geom/WktMultiPoint',
+        './formats/wkt/geom/WktMultiPolygon',
+        './formats/wkt/geom/WktObject',
+        './formats/wkt/geom/WktPoint',
+        './formats/wkt/geom/WktPolygon',
+        './formats/wkt/WktTokens',
+        './formats/wkt/geom/WktTriangle',
+        './formats/wkt/WktType',
+        './ogc/wms/WmsCapabilities',
         './layer/WmsLayer',
-        './ogc/WmsLayerCapabilities',
+        './ogc/wms/WmsLayerCapabilities',
+        './layer/WmsTimeDimensionedLayer',
         './util/WmsUrlBuilder',
+        './ogc/wmts/WmtsCapabilities',
+        './layer/WmtsLayer',
+        './ogc/wmts/WmtsLayerCapabilities',
         './WorldWindow',
         './util/WWMath',
+        './util/WWMessage',
         './util/WWUtil',
+        './util/XmlDocument',
         './globe/ZeroElevationModel'],
     function (AbstractError,
               Angle,
+              Annotation,
+              AnnotationAttributes,
+              AreaMeasurer,
               ArgumentError,
+              AtmosphereLayer,
+              AtmosphereProgram,
               BasicProgram,
               BasicTextureProgram,
+              BasicTimeSequence,
               BingAerialLayer,
               BingAerialWithLabelsLayer,
               BingRoadsLayer,
               BingWMSLayer,
-              BlueMarbleLayer,
               BMNGLandsatLayer,
               BMNGLayer,
               BMNGOneImageLayer,
               BMNGRestLayer,
               BoundingBox,
               ClickRecognizer,
+              ColladaLoader,
               Color,
               Compass,
               CompassLayer,
               CoordinatesDisplayLayer,
+              DateWW,
+              DigitalGlobeTiledImageLayer,
               DragRecognizer,
               DrawContext,
               EarthElevationModel,
@@ -162,6 +280,7 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
               ElevationModel,
               Font,
               FrameStatistics,
+              FrameStatisticsLayer,
               FramebufferTexture,
               FramebufferTile,
               FramebufferTileController,
@@ -169,6 +288,16 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
               GeographicMesh,
               GeographicProjection,
               GeographicText,
+              GeoJSONGeometry,
+              GeoJSONGeometryCollection,
+              GeoJSONGeometryLineString,
+              GeoJSONGeometryMultiLineString,
+              GeoJSONGeometryMultiPoint,
+              GeoJSONGeometryMultiPolygon,
+              GeoJSONGeometryPoint,
+              GeoJSONGeometryPolygon,
+              GeoJSONParser,
+              GeoTiffReader,
               GestureRecognizer,
               Globe,
               Globe2D,
@@ -176,11 +305,66 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
               GpuProgram,
               GpuResourceCache,
               GpuShader,
+              GroundProgram,
+              HashMap,
               HighlightController,
+              ImagePyramid,
               ImageSource,
               ImageTile,
+              Insets,
+              ItemIcon,
+              KmlAbstractView,
+              KmlBalloonStyle,
+              KmlCamera,
+              KmlColorStyle,
+              KmlContainer,
+              KmlControls,
+              KmlDocument,
+              KmlElements,
+              KmlFeature,
+              KmlFile,
+              KmlFolder,
+              KmlGeometry,
+              KmlGroundOverlay,
+              KmlIcon,
+              KmlIconStyle,
+              KmlLabelStyle,
+              KmlLatLonAltBox,
+              KmlLatLonBox,
+              KmlLatLonQuad,
+              KmlLinearRing,
+              KmlLineString,
+              KmlLineStyle,
+              KmlLink,
+              KmlListStyle,
+              KmlLocation,
+              KmlLod,
+              KmlLookAt,
+              KmlMultiGeometry,
+              KmlNetworkLink,
+              KmlObject,
+              KmlOrientation,
+              KmlOverlay,
+              KmlPhotoOverlay,
+              KmlPlacemark,
+              KmlPoint,
+              KmlPolygon,
+              KmlPolyStyle,
+              KmlRegion,
+              KmlScreenOverlay,
+              KmlStyle,
+              KmlStyleMap,
+              KmlStyleSelector,
+              KmlSubStyle,
+              KmlTimePrimitive,
+              KmlTimeSpan,
+              KmlTimeStamp,
+              KmlTour,
+              KmlTrack,
+              KmlTreeVisibility,
               LandsatRestLayer,
               Layer,
+              LengthMeasurer,
               Level,
               LevelRowColumnUrlBuilder,
               LevelSet,
@@ -189,6 +373,7 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
               Logger,
               LookAtNavigator,
               Matrix,
+              MeasurerUtils,
               MemoryCache,
               MemoryCacheListener,
               MercatorTiledImageLayer,
@@ -197,10 +382,11 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
               NominatimGeocoder,
               NotYetImplementedError,
               Offset,
-              OneImageLayer,
               OpenStreetMapImageLayer,
+              Pair,
               PanRecognizer,
               Path,
+              PeriodicTimeSequence,
               PickedObject,
               PickedObjectList,
               PinchRecognizer,
@@ -208,28 +394,38 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
               PlacemarkAttributes,
               Plane,
               Polygon,
+              PolygonSplitter,
               Position,
               ProjectionEquirectangular,
               ProjectionGnomonic,
               ProjectionMercator,
               ProjectionPolarEquidistant,
               ProjectionUPS,
+              ProjectionWgs84,
               Rectangle,
               Renderable,
               RenderableLayer,
+              RestTiledImageLayer,
               RotationRecognizer,
+              Scale,
+              Schema,
               ScreenImage,
               ScreenText,
               Sector,
               ShapeAttributes,
               Shapefile,
               ShowTessellationLayer,
+              SkyProgram,
+              StarFieldLayer,
+              StarFieldProgram,
+              SunPosition,
               SurfaceImage,
               SurfaceCircle,
               SurfaceEllipse,
               SurfacePolygon,
               SurfacePolyline,
               SurfaceRectangle,
+              SurfaceRenderable,
               SurfaceSector,
               SurfaceShape,
               SurfaceShapeTile,
@@ -238,6 +434,7 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
               SurfaceTileRenderer,
               SurfaceTileRendererProgram,
               TapRecognizer,
+              TectonicPlatesLayer,
               Terrain,
               TerrainTile,
               TerrainTileList,
@@ -252,27 +449,50 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
               TileFactory,
               TiltRecognizer,
               Touch,
+              TriangleMesh,
               UnsupportedOperationError,
               Vec2,
               Vec3,
               ViewControlsLayer,
+              ViewVolume,
+              WcsTileUrlBuilder,
+              WfsCapabilities,
+              Wkt,
+              WktElements,
+              WktGeometryCollection,
+              WktLineString,
+              WktMultiLineString,
+              WktMultiPoint,
+              WktMultiPolygon,
+              WktObject,
+              WktPoint,
+              WktPolygon,
+              WktTokens,
+              WktTriangle,
+              WktType,
               WmsCapabilities,
               WmsLayer,
               WmsLayerCapabilities,
+              WmsTimeDimensionedLayer,
               WmsUrlBuilder,
+              WmtsCapabilities,
+              WmtsLayer,
+              WmtsLayerCapabilities,
               WorldWindow,
               WWMath,
+              WWMessage,
               WWUtil,
+              XmlDocument,
               ZeroElevationModel) {
         "use strict";
         /**
-         * This is the top-level World Wind module. It is global.
+         * This is the top-level WorldWind module. It is global.
          * @exports WorldWind
          * @global
          */
         var WorldWind = {
             /**
-             * The World Wind version number.
+             * The WorldWind version number.
              * @default "0.0.0"
              * @constant
              */
@@ -432,7 +652,7 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
             RECOGNIZED: "recognized",
 
             /**
-             * The event name of World Wind redraw events.
+             * The event name of WorldWind redraw events.
              */
             REDRAW_EVENT_TYPE: "WorldWindRedraw",
 
@@ -475,24 +695,32 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
 
         WorldWind['AbstractError'] = AbstractError;
         WorldWind['Angle'] = Angle;
+        WorldWind['Annotation'] = Annotation;
+        WorldWind['AnnotationAttributes'] = AnnotationAttributes;
+        WorldWind['AreaMeasurer'] = AreaMeasurer;
         WorldWind['ArgumentError'] = ArgumentError;
+        WorldWind['AtmosphereLayer'] = AtmosphereLayer;
+        WorldWind['AtmosphereProgram'] = AtmosphereProgram;
         WorldWind['BasicProgram'] = BasicProgram;
         WorldWind['BasicTextureProgram'] = BasicTextureProgram;
+        WorldWind['BasicTimeSequence'] = BasicTimeSequence;
         WorldWind['BingAerialLayer'] = BingAerialLayer;
         WorldWind['BingAerialWithLabelsLayer'] = BingAerialWithLabelsLayer;
         WorldWind['BingRoadsLayer'] = BingRoadsLayer;
         WorldWind['BingWMSLayer'] = BingWMSLayer;
-        WorldWind['BlueMarbleLayer'] = BlueMarbleLayer;
         WorldWind['BMNGLandsatLayer'] = BMNGLandsatLayer;
         WorldWind['BMNGLayer'] = BMNGLayer;
         WorldWind['BMNGOneImageLayer'] = BMNGOneImageLayer;
         WorldWind['BMNGRestLayer'] = BMNGRestLayer;
         WorldWind['BoundingBox'] = BoundingBox;
         WorldWind['ClickRecognizer'] = ClickRecognizer;
+        WorldWind['ColladaLoader'] = ColladaLoader;
         WorldWind['Color'] = Color;
         WorldWind['Compass'] = Compass;
         WorldWind['CompassLayer'] = CompassLayer;
         WorldWind['CoordinatesDisplayLayer'] = CoordinatesDisplayLayer;
+        WorldWind['DateWW'] = DateWW;
+        WorldWind['DigitalGlobeTiledImageLayer'] = DigitalGlobeTiledImageLayer;
         WorldWind['DragRecognizer'] = DragRecognizer;
         WorldWind['DrawContext'] = DrawContext;
         WorldWind['EarthElevationModel'] = EarthElevationModel;
@@ -500,6 +728,7 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
         WorldWind['ElevationModel'] = ElevationModel;
         WorldWind['Font'] = Font;
         WorldWind['FrameStatistics'] = FrameStatistics;
+        WorldWind['FrameStatisticsLayer'] = FrameStatisticsLayer;
         WorldWind['FramebufferTexture'] = FramebufferTexture;
         WorldWind['FramebufferTile'] = FramebufferTile;
         WorldWind['FramebufferTileController'] = FramebufferTileController;
@@ -507,6 +736,16 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
         WorldWind['GeographicMesh'] = GeographicMesh;
         WorldWind['GeographicProjection'] = GeographicProjection;
         WorldWind['GeographicText'] = GeographicText;
+        WorldWind['GeoJSONGeometry'] = GeoJSONGeometry;
+        WorldWind['GeoJSONGeometryCollection'] = GeoJSONGeometryCollection;
+        WorldWind['GeoJSONGeometryLineString'] = GeoJSONGeometryLineString;
+        WorldWind['GeoJSONGeometryMultiLineString'] = GeoJSONGeometryMultiLineString;
+        WorldWind['GeoJSONGeometryMultiPoint'] = GeoJSONGeometryMultiPoint;
+        WorldWind['GeoJSONGeometryMultiPolygon'] = GeoJSONGeometryMultiPolygon;
+        WorldWind['GeoJSONGeometryPoint'] = GeoJSONGeometryPoint;
+        WorldWind['GeoJSONGeometryPolygon'] = GeoJSONGeometryPolygon;
+        WorldWind['GeoJSONParser'] = GeoJSONParser;
+        WorldWind['GeoTiffReader'] = GeoTiffReader;
         WorldWind['GestureRecognizer'] = GestureRecognizer;
         WorldWind['Globe'] = Globe;
         WorldWind['Globe2D'] = Globe2D;
@@ -514,11 +753,18 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
         WorldWind['GpuProgram'] = GpuProgram;
         WorldWind['GpuResourceCache'] = GpuResourceCache;
         WorldWind['GpuShader'] = GpuShader;
+        WorldWind['GroundProgram'] = GroundProgram;
+        WorldWind['HashMap'] = HashMap;
         WorldWind['HighlightController'] = HighlightController;
         WorldWind['ImageSource'] = ImageSource;
         WorldWind['ImageTile'] = ImageTile;
+        WorldWind['Insets'] = Insets;
+        WorldWind['KmlControls'];
+        WorldWind['KmlFile'] = KmlFile;
+        WorldWind['KmlTreeVisibility'] = KmlTreeVisibility;
         WorldWind['LandsatRestLayer'] = LandsatRestLayer;
         WorldWind['Layer'] = Layer;
+        WorldWind['LengthMeasurer'] = LengthMeasurer;
         WorldWind['Level'] = Level;
         WorldWind['LevelRowColumnUrlBuilder'] = LevelRowColumnUrlBuilder;
         WorldWind['LevelSet'] = LevelSet;
@@ -527,6 +773,7 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
         WorldWind['Logger'] = Logger;
         WorldWind['LookAtNavigator'] = LookAtNavigator;
         WorldWind['Matrix'] = Matrix;
+        WorldWind['MeasurerUtils'] = MeasurerUtils;
         WorldWind['MemoryCache'] = MemoryCache;
         WorldWind['MemoryCacheListener'] = MemoryCacheListener;
         WorldWind['MercatorTiledImageLayer'] = MercatorTiledImageLayer;
@@ -535,10 +782,10 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
         WorldWind['NominatimGeocoder'] = NominatimGeocoder;
         WorldWind['NotYetImplementedError'] = NotYetImplementedError;
         WorldWind['Offset'] = Offset;
-        WorldWind['OneImageLayer'] = OneImageLayer;
         WorldWind['OpenStreetMapImageLayer'] = OpenStreetMapImageLayer;
         WorldWind['PanRecognizer'] = PanRecognizer;
         WorldWind['Path'] = Path;
+        WorldWind['PeriodicTimeSequence'] = PeriodicTimeSequence;
         WorldWind['PickedObject'] = PickedObject;
         WorldWind['PickedObjectList'] = PickedObjectList;
         WorldWind['PinchRecognizer'] = PinchRecognizer;
@@ -546,15 +793,18 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
         WorldWind['PlacemarkAttributes'] = PlacemarkAttributes;
         WorldWind['Plane'] = Plane;
         WorldWind['Polygon'] = Polygon;
+        WorldWind['PolygonSplitter'] = PolygonSplitter;
         WorldWind['Position'] = Position;
         WorldWind['ProjectionEquirectangular'] = ProjectionEquirectangular;
         WorldWind['ProjectionGnomonic'] = ProjectionGnomonic;
         WorldWind['ProjectionMercator'] = ProjectionMercator;
         WorldWind['ProjectionPolarEquidistant'] = ProjectionPolarEquidistant;
         WorldWind['ProjectionUPS'] = ProjectionUPS;
+        WorldWind['ProjectionWgs84'] = ProjectionWgs84;
         WorldWind['Rectangle'] = Rectangle;
         WorldWind['Renderable'] = Renderable;
         WorldWind['RenderableLayer'] = RenderableLayer;
+        WorldWind['RestTiledImageLayer'] = RestTiledImageLayer;
         WorldWind['RotationRecognizer'] = RotationRecognizer;
         WorldWind['ScreenText'] = ScreenText;
         WorldWind['ScreenImage'] = ScreenImage;
@@ -562,12 +812,17 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
         WorldWind['ShapeAttributes'] = ShapeAttributes;
         WorldWind['Shapefile'] = Shapefile;
         WorldWind['ShowTessellationLayer'] = ShowTessellationLayer;
+        WorldWind['SkyProgram'] = SkyProgram;
+        WorldWind['StarFieldLayer'] = StarFieldLayer;
+        WorldWind['StarFieldProgram'] = StarFieldProgram;
+        WorldWind['SunPosition'] = SunPosition;
         WorldWind['SurfaceImage'] = SurfaceImage;
         WorldWind['SurfaceCircle'] = SurfaceCircle;
         WorldWind['SurfaceEllipse'] = SurfaceEllipse;
         WorldWind['SurfacePolygon'] = SurfacePolygon;
         WorldWind['SurfacePolyline'] = SurfacePolyline;
         WorldWind['SurfaceRectangle'] = SurfaceRectangle;
+        WorldWind['SurfaceRenderable'] = SurfaceRenderable;
         WorldWind['SurfaceSector'] = SurfaceSector;
         WorldWind['SurfaceShape'] = SurfaceShape;
         WorldWind['SurfaceShapeTile'] = SurfaceShapeTile;
@@ -576,6 +831,7 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
         WorldWind['SurfaceTileRenderer'] = SurfaceTileRenderer;
         WorldWind['SurfaceTileRendererProgram'] = SurfaceTileRendererProgram;
         WorldWind['TapRecognizer'] = TapRecognizer;
+        WorldWind['TectonicPlatesLayer'] = TectonicPlatesLayer;
         WorldWind['Terrain'] = Terrain;
         WorldWind['TerrainTile'] = TerrainTile;
         WorldWind['TerrainTileList'] = TerrainTileList;
@@ -590,26 +846,47 @@ define([ // PLEASE KEEP ALL THIS IN ALPHABETICAL ORDER BY MODULE NAME (not direc
         WorldWind['TileFactory'] = TileFactory;
         WorldWind['TiltRecognizer'] = TiltRecognizer;
         WorldWind['Touch'] = Touch;
+        WorldWind['TriangleMesh'] = TriangleMesh;
         WorldWind['UnsupportedOperationError'] = UnsupportedOperationError;
         WorldWind['Vec2'] = Vec2;
         WorldWind['Vec3'] = Vec3;
         WorldWind['ViewControlsLayer'] = ViewControlsLayer;
+        WorldWind['WcsTileUrlBuilder'] = WcsTileUrlBuilder;
+        WorldWind['WfsCapabilities'] = WfsCapabilities;
+        WorldWind['Wkt'] = Wkt;
+        WorldWind['WktElements'] = WktElements;
+        WorldWind['WktGeometryCollection'] = WktGeometryCollection;
+        WorldWind['WktLineString'] = WktLineString;
+        WorldWind['WktMultiLineString'] = WktMultiLineString;
+        WorldWind['WktMultiPoint'] = WktMultiPoint;
+        WorldWind['WktMultiPolygon'] = WktMultiPolygon;
+        WorldWind['WktObject'] = WktObject;
+        WorldWind['WktPoint'] = WktPoint;
+        WorldWind['WktPolygon'] = WktPolygon;
+        WorldWind['WktTokens'] = WktTokens;
+        WorldWind['WktTriangle'] = WktTriangle;
+        WorldWind['WktType'] = WktType;
         WorldWind['WmsCapabilities'] = WmsCapabilities;
         WorldWind['WmsLayer'] = WmsLayer;
         WorldWind['WmsLayerCapabilities'] = WmsLayerCapabilities;
+        WorldWind['WmsTimeDimensionedLayer'] = WmsTimeDimensionedLayer;
         WorldWind['WmsUrlBuilder'] = WmsUrlBuilder;
+        WorldWind['WmtsCapabilities'] = WmtsCapabilities;
+        WorldWind['WmtsLayer'] = WmtsLayer;
+        WorldWind['WmtsLayerCapabilities'] = WmtsLayerCapabilities;
         WorldWind['WWMath'] = WWMath;
+        WorldWind['WWMessage'] = WWMessage;
         WorldWind['WWUtil'] = WWUtil;
         WorldWind['WorldWindow'] = WorldWindow;
         WorldWind['ZeroElevationModel'] = ZeroElevationModel;
 
         /**
-         * Holds configuration parameters for World Wind. Applications may modify these parameters prior to creating
-         * their first World Wind objects. Configuration properties are:
+         * Holds configuration parameters for WorldWind. Applications may modify these parameters prior to creating
+         * their first WorldWind objects. Configuration properties are:
          * <ul>
          *     <li><code>gpuCacheSize</code>: A Number indicating the size in bytes to allocate from GPU memory for
          *     resources such as textures, GLSL programs and buffer objects. Default is 250e6 (250 MB).</li>
-         *     <li><code>baseUrl</code>: The URL of the directory containing the World Wind Library and its resources.</li>
+         *     <li><code>baseUrl</code>: The URL of the directory containing the WorldWind Library and its resources.</li>
          * </ul>
          * @type {{gpuCacheSize: number}}
          */

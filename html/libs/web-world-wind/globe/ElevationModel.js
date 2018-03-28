@@ -4,7 +4,7 @@
  */
 /**
  * @exports ElevationModel
- * @version $Id: ElevationModel.js 2936 2015-03-27 22:04:59Z tgaskins $
+ * @version $Id: ElevationModel.js 3415 2015-08-20 19:15:57Z tgaskins $
  */
 define([
         '../util/AbsentResourceList',
@@ -382,6 +382,7 @@ define([
         ElevationModel.prototype.areaElevationForCoord = function (s, t, levelNumber, result, resultIndex) {
             var level, levelWidth, levelHeight,
                 tMin, tMax,
+                vMin, vMax,
                 u, v,
                 x0, x1, y0, y1,
                 xf, yf,
@@ -394,21 +395,23 @@ define([
                 levelHeight = Math.round(level.tileHeight * 180 / level.tileDelta.latitude);
                 tMin = 1 / (2 * levelHeight);
                 tMax = 1 - tMin;
+                vMin = 0;
+                vMax = levelHeight - 1;
                 u = levelWidth * WWMath.fract(s); // wrap the horizontal coordinate
                 v = levelHeight * WWMath.clamp(t, tMin, tMax); // clamp the vertical coordinate to the level edge
                 x0 = WWMath.mod(Math.floor(u - 0.5), levelWidth);
                 x1 = WWMath.mod((x0 + 1), levelWidth);
-                y0 = Math.floor(v - 0.5);
-                y1 = y0 + 1;
+                y0 = WWMath.clamp(Math.floor(v - 0.5), vMin, vMax);
+                y1 = WWMath.clamp(y0 + 1, vMin, vMax);
                 xf = WWMath.fract(u - 0.5);
                 yf = WWMath.fract(v - 0.5);
                 retrieveTiles = (i == levelNumber) || (i == 0);
 
                 if (this.lookupPixels(x0, x1, y0, y1, level, retrieveTiles, pixels)) {
                     result[resultIndex] = (1 - xf) * (1 - yf) * pixels[0] +
-                    xf * (1 - yf) * pixels[1] +
-                    (1 - xf) * yf * pixels[2] +
-                    xf * yf * pixels[3];
+                        xf * (1 - yf) * pixels[1] +
+                        (1 - xf) * yf * pixels[2] +
+                        xf * yf * pixels[3];
                     return;
                 }
             }
@@ -458,7 +461,7 @@ define([
 
             // If the tile's elevations have expired, cause it to be re-retrieved. Note that the current,
             // expired elevations are still used until the updated ones arrive.
-            if ((image == null || this.isTileImageExpired(tile) && retrieveTiles)) {
+            if (image == null && retrieveTiles) {
                 this.retrieveTileImage(tile);
             }
 
@@ -547,17 +550,6 @@ define([
         // Intentionally not documented.
         ElevationModel.prototype.addToCurrentTiles = function (tile) {
             this.currentTiles.push(tile);
-
-            // If the tile's elevations have expired, cause it to be re-retrieved. Note that the current,
-            // expired elevations are still used until the updated ones arrive.
-            if (this.isTileImageExpired(tile)) {
-                this.retrieveTileImage(tile);
-            }
-        };
-
-        // Intentionally not documented.
-        ElevationModel.prototype.isTileImageExpired = function (tile) {
-            return !(!this.expiration || this.expiration > Date.now());
         };
 
         // Intentionally not documented.
@@ -605,12 +597,17 @@ define([
                         elevationModel.removeFromCurrentRetrievals(tile.imagePath);
 
                         var contentType = xhr.getResponseHeader("content-type");
+                        // NOTE: for geoserver, contentType returns as image/bil, must set it like this or WebWorldWind cannot parse the result bil and display elevation models
+                        if (contentType === "image/bil") {
+                            contentType = "application/bil16";    
+                        }                        
 
                         if (xhr.status === 200) {
                             if (contentType === elevationModel.retrievalImageFormat
                                 || contentType === "text/plain"
                                 || contentType === "application/octet-stream") {
                                 Logger.log(Logger.LEVEL_INFO, "Elevations retrieval succeeded: " + url);
+                                console.log("Elevations retrieval succeeded: " + url);
                                 elevationModel.loadElevationImage(tile, xhr);
                                 elevationModel.absentResourceList.unmarkResourceAbsent(tile.imagePath);
 
@@ -670,6 +667,9 @@ define([
             if (this.retrievalImageFormat == "application/bil16") {
                 elevationImage.imageData = new Int16Array(xhr.response);
                 elevationImage.size = elevationImage.imageData.length * 2;
+            } else if (this.retrievalImageFormat == "application/bil32") {
+                elevationImage.imageData = new Float32Array(xhr.response);
+                elevationImage.size = elevationImage.imageData.length * 4;
             }
 
             if (elevationImage.imageData) {
